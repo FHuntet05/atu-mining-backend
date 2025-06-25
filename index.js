@@ -37,7 +37,7 @@ bot.start((ctx) => {
 // --- CONFIGURACIÓN DEL WEBHOOK ---
 // --- ¡AQUÍ ESTÁ LA CORRECCIÓN! ---
 // Usamos backticks () para crear un template string correctamente.
-const secretPath = /telegraf/${bot.token};
+    const secretPath = `/telegraf/${bot.token}`;
 
 app.use(bot.webhookCallback(secretPath));
 
