@@ -1,10 +1,10 @@
 // En: atu-mining-backend/index.js
-// VERSIÓN FINAL REVISADA Y CORREGIDA
+// VERSIÓN FINAL CON ARRANQUE SECUENCIAL Y ROBUSTO
 
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
-const cors = require('cors'); // Corregido: require('cors')
+const cors = require('cors'); // Corregido el require
 const { Telegraf, session } = require('telegraf');
 
 // --- MODELOS ---
@@ -18,12 +18,12 @@ const miningRoutes = require('./routes/miningRoutes');
 const taskRoutes = require('./routes/taskRoutes');
 const referralRoutes = require('./routes/referralRoutes');
 const boostRoutes = require('./routes/boostRoutes');
-const transactionRoutes = require('./routes/transactionRoutes'); // Asegúrate de tener este archivo y ruta
+const transactionRoutes = require('./routes/transactionRoutes');
 const webhookRoutes = require('./routes/webhookRoutes');
 
 // --- INICIALIZACIÓN DE EXPRESS ---
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 10000;
 
 // --- MIDDLEWARES GLOBALES ---
 app.use(cors());
@@ -35,9 +35,8 @@ const ADMIN_ID = parseInt(process.env.ADMIN_TELEGRAM_ID, 10);
 app.locals.bot = bot;
 bot.use(session());
 
-// --- LÓGICA DEL BOT ---
-
-// Middleware para actualizar datos del usuario en cada interacción
+// --- LÓGICA DEL BOT (Callbacks, Comandos, etc.) ---
+// ... (Toda tu lógica de bot.use, bot.start, bot.on('callback_query') va aquí. NO CAMBIA) ...
 bot.use(async (ctx, next) => {
     if (ctx.from) {
         try {
@@ -46,8 +45,6 @@ bot.use(async (ctx, next) => {
     }
     return next();
 });
-
-// Comando /start
 bot.start(async (ctx) => {
     const miniAppUrl = process.env.MINI_APP_URL;
     if (!miniAppUrl) return ctx.reply('Aplicación no configurada.');
@@ -65,22 +62,15 @@ bot.start(async (ctx) => {
         reply_markup: { inline_keyboard: [[{ text: '🚀 Abrir App de Minería', web_app: { url: miniAppUrl } }]] }
     });
 });
-
-// Lógica de aprobación/rechazo de depósitos
 bot.on('callback_query', async (ctx) => {
     if (ctx.from.id !== ADMIN_ID) return ctx.answerCbQuery('Acción no autorizada.');
-
     const [action, depositId] = ctx.callbackQuery.data.split(':');
     if (!['approve_deposit', 'reject_deposit'].includes(action)) return ctx.answerCbQuery();
-    
     try {
         const deposit = await PendingDeposit.findById(depositId);
-        if (!deposit || deposit.status !== 'pending') {
-            return ctx.editMessageText(`Esta acción ya fue procesada.`);
-        }
+        if (!deposit || deposit.status !== 'pending') { return ctx.editMessageText(`Esta acción ya fue procesada.`); }
         const user = await User.findOne({ telegramId: deposit.telegramId });
-        if (!user) return ctx.editMessageText(`Usuario no encontrado.`);
-
+        if (!user) { return ctx.editMessageText(`Usuario no encontrado.`); }
         if (action === 'approve_deposit') {
             user.usdtBalance += deposit.amount;
             deposit.status = 'approved';
@@ -96,11 +86,9 @@ bot.on('callback_query', async (ctx) => {
             await ctx.editMessageText(`❌ Depósito de ${deposit.amount.toFixed(4)} USDT para @${user.username} RECHAZADO.`);
             await bot.telegram.sendMessage(user.telegramId, `⚠️ Tu depósito de ${deposit.amount.toFixed(4)} USDT ha sido rechazado.`);
         }
-    } catch (error) {
-        console.error("Error procesando callback de depósito:", error);
-        await ctx.answerCbQuery('Error al procesar la acción.');
-    }
+    } catch (error) { console.error("Error procesando callback de depósito:", error); await ctx.answerCbQuery('Error al procesar la acción.'); }
 });
+// --- FIN DE LÓGICA DEL BOT ---
 
 
 // --- REGISTRO DE RUTAS DE LA API ---
@@ -115,33 +103,47 @@ app.use('/api/webhooks', webhookRoutes);
 // --- ARRANQUE DEL SERVIDOR Y WEBHOOKS ---
 const startServer = async () => {
     try {
+        // PASO 1: Conectar a la base de datos
         await mongoose.connect(process.env.DATABASE_URL);
         console.log('✅ Conectado a MongoDB.');
 
+        const backendUrl = process.env.RENDER_EXTERNAL_URL;
         const secretPath = `/telegraf/${bot.token}`;
+
+        // PASO 2: Configurar webhook de Telegraf si estamos en producción
+        if (backendUrl) {
+            console.log(`Modo Producción: Intentando configurar webhook de Telegraf...`);
+            // Esperamos a que la configuración del webhook se complete
+            await bot.telegram.setWebhook(`${backendUrl}${secretPath}`);
+            console.log(`✅ Webhook de Telegraf configurado en: ${backendUrl}${secretPath}`);
+        }
+        
+        // PASO 3: Registrar el middleware del webhook de Telegraf
         app.use(bot.webhookCallback(secretPath));
 
+        // PASO 4: SOLO AHORA, que todo está listo, iniciamos el servidor Express
         app.listen(PORT, () => {
-            console.log(`🚀 Servidor Express corriendo en el puerto ${PORT}.`);
-            const backendUrl = process.env.RENDER_EXTERNAL_URL;
-            if (backendUrl) {
-                console.log(`Modo Producción: Configurando webhook de Telegraf en: ${backendUrl}${secretPath}`);
-                bot.telegram.setWebhook(`${backendUrl}${secretPath}`);
-            } else {
-                console.warn('Modo Desarrollo: Iniciando bot en modo polling.');
-                bot.launch();
-            }
+            console.log(`🚀 Servidor Express corriendo y listo para recibir peticiones en el puerto ${PORT}.`);
         });
+
+        // PASO 5: Iniciar el bot en modo polling si estamos en desarrollo
+        if (!backendUrl) {
+            console.warn('Modo Desarrollo: Iniciando bot en modo polling.');
+            bot.launch();
+        }
+
     } catch (error) {
         console.error('❌ FALLO CRÍTICO AL INICIAR EL SERVIDOR:', error);
-        process.exit(1);
+        process.exit(1); // Detiene el proceso si algo falla en el arranque
     }
 };
 
 startServer();
 
-// Manejo de errores y señales de terminación
+// Manejo de errores de Telegraf fuera del ciclo de arranque
 bot.catch((err, ctx) => console.error(`Error de Telegraf para ${ctx.updateType}:`, err));
+
+// Manejo de señales de terminación para desarrollo local
 if (process.env.NODE_ENV !== 'production') {
     process.once('SIGINT', () => bot.stop('SIGINT'));
     process.once('SIGTERM', () => bot.stop('SIGTERM'));
