@@ -52,7 +52,7 @@ app.listen(PORT, () => {
   
   const backendUrl = process.env.RENDER_EXTERNAL_URL;
   if (backendUrl) {
-      console.log(Configurando webhook para Telegram en: ${backendUrl}${secretPath});
+      console.log(`Configurando webhook para Telegram en: ${backendUrl}${secretPath}`);
       bot.telegram.setWebhook(${backendUrl}${secretPath});
   } else {
       console.warn('Advertencia: RENDER_EXTERNAL_URL no está definida. No se pudo configurar el webhook. El bot no funcionará en producción.');
