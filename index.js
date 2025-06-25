@@ -182,9 +182,9 @@ app.listen(PORT, () => {
   } else {
     console.warn('Advertencia: RENDER_EXTERNAL_URL no está definida. El bot no funcionará en producción.');
   }
-});*/
+});
 
 // Manejo de errores y cierre del bot
 bot.catch((err, ctx) => console.error(`Error para ${ctx.updateType}`, err));
 process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));*/
