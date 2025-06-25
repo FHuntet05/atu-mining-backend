@@ -5,65 +5,54 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const { Telegraf } = require('telegraf');
+const User = require('./models/User'); // Importamos User para usarlo en /start
 
-// --- CONFIGURACIÓN DE EXPRESS ---
 const app = express();
 app.use(cors());
 app.use(express.json());
 const PORT = process.env.PORT || 3001;
 
-// --- CONEXIÓN A MONGODB ---
-mongoose.connect(process.env.DATABASE_URL)
-  .then(() => console.log('✅ Conectado a MongoDB Atlas.'))
-  .catch((error) => console.error('❌ Error al conectar a MongoDB:', error.message));
+mongoose.connect(process.env.DATABASE_URL).then(() => console.log('✅ Conectado a MongoDB.')).catch(e => console.error('❌ DB Error:', e));
 
-// --- CONFIGURACIÓN DEL BOT ---
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
-// --- LÓGICA DE COMANDOS DEL BOT ---
-bot.start((ctx) => {
+bot.start(async (ctx) => {
     const miniAppUrl = process.env.MINI_APP_URL;
-    if (!miniAppUrl) {
-        return ctx.reply('La aplicación no está configurada. Contacta al administrador.');
-    }
-    ctx.reply('¡Bienvenido a ATU Mining! Haz clic abajo para empezar.', {
+    const startParam = ctx.startPayload; 
+    
+    try {
+        const user = await User.findOne({ telegramId: ctx.from.id });
+        if (!user && startParam) {
+            const referrerId = parseInt(startParam, 10);
+            if (!isNaN(referrerId) && referrerId !== ctx.from.id) {
+                await User.updateOne({ telegramId: referrerId }, { $addToSet: { referrals: ctx.from.id } });
+            }
+        }
+    } catch (e) { console.error("Error al procesar referido en /start:", e); }
+
+    ctx.reply('¡Bienvenido a ATU Mining!', {
         reply_markup: {
             inline_keyboard: [[{ text: '🚀 Abrir App de Minería', web_app: { url: miniAppUrl } }]]
         }
     });
 });
-// (Aquí irán tus comandos de admin en el futuro)
+// (Aquí van tus comandos de admin)
 
-// --- CONFIGURACIÓN DEL WEBHOOK ---
-// --- ¡AQUÍ ESTÁ LA CORRECCIÓN! ---
-// Usamos backticks (`) para crear un template string correctamente.
+// Rutas de la API
+app.use('/api/users', require('./routes/userRoutes'));
+app.use('/api/mining', require('./routes/miningRoutes'));
+app.use('/api/tasks', require('./routes/taskRoutes'));
+app.use('/api/referrals', require('./routes/referralRoutes'));
+
+// Webhook de Telegraf
 const secretPath = `/telegraf/${bot.token}`;
-
 app.use(bot.webhookCallback(secretPath));
 
-// --- RUTAS DE LA API ---
-const userRoutes = require('./routes/userRoutes');
-app.use('/api/users', userRoutes);
-// (Aquí irán tus otras rutas de la API)
-
-// --- INICIO DEL SERVIDOR ---
 app.listen(PORT, () => {
-  console.log(`🚀 Servidor Express corriendo en el puerto ${PORT}`);
-  
+  console.log(`🚀 Servidor Express corriendo.`);
   const backendUrl = process.env.RENDER_EXTERNAL_URL;
   if (backendUrl) {
-      console.log(`Configurando webhook para Telegram en: ${backendUrl}${secretPath}`);
-      bot.telegram.setWebhook(`${backendUrl}${secretPath}`);
-  } else {
-      console.warn('Advertencia: RENDER_EXTERNAL_URL no está definida. No se pudo configurar el webhook. El bot no funcionará en producción.');
-  }
+    console.log(`Configurando webhook en: ${backendUrl}${secretPath}`);
+    bot.telegram.setWebhook(`${backendUrl}${secretPath}`);
+  } else { console.warn('RENDER_EXTERNAL_URL no definida.'); }
 });
-
-// Manejo de errores del bot
-bot.catch((err, ctx) => {
-  console.error(`Error para ${ctx.updateType}`, err);
-});
-
-// Aseguramos que el proceso no termine por errores inesperados
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
