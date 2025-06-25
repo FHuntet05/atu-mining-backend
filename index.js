@@ -4,7 +4,7 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const { Telegraf, session } = require('telegraf'); // ¡CORRECCIÓN! Importamos Telegraf y session aquí
+const { Telegraf } = require('telegraf'); // ¡CORRECCIÓN! Importamos Telegraf y session aquí
 const User = require('./models/User');
 const Transaction = require('./models/Transaction');
 
@@ -20,10 +20,20 @@ mongoose.connect(process.env.DATABASE_URL)
   .then(() => console.log('✅ Conectado a MongoDB Atlas.'))
   .catch((error) => console.error('❌ Error al conectar a MongoDB:', error.message));
 
-// --- CONFIGURACIÓN DEL BOT DE TELEGRAF ---
+
+app.get('/', (req, res) => {
+    res.send('El backend de ATU Mining está vivo.');
+});
+
+app.listen(PORT, () => {
+  console.log(`🚀 Servidor Express corriendo en el puerto ${PORT}`);
+});
+
+/* --- CONFIGURACIÓN DEL BOT DE TELEGRAF ---
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const ADMIN_ID = parseInt(process.env.ADMIN_TELEGRAM_ID, 10);
 bot.use(session()); // Habilitamos las sesiones para los comandos de admin
+
 
 
 // --- Middleware para registrar/actualizar usuarios en cada interacción ---
