@@ -1,4 +1,6 @@
 // En: atu-mining-backend/index.js
+// CÓDIGO COMPLETO Y CORREGIDO
+
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
@@ -96,19 +98,29 @@ app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/mining', require('./routes/miningRoutes'));
 app.use('/api/tasks', require('./routes/taskRoutes'));
 app.use('/api/referrals', require('./routes/referralRoutes'));
-app.use('/api/boosts', require('./routes/boostRoutes')); // Rutas para boosts
+app.use('/api/boosts', require('./routes/boostRoutes'));
+
 const secretPath = `/telegraf/${bot.token}`;
 app.use(bot.webhookCallback(secretPath));
 
+// --- LA CORRECCIÓN ESTÁ AQUÍ ---
+const backendUrl = process.env.RENDER_EXTERNAL_URL;
+
 app.listen(PORT, () => {
-  console.log(`🚀 Servidor Express corriendo.`);
-  const backendUrl = process.env.RENDER_EXTERNAL_URL;
+  console.log(`🚀 Servidor Express corriendo en el puerto ${PORT}.`);
   if (backendUrl) {
-    console.log(`Configurando webhook en: ${backendUrl}${secretPath}`);
+    console.log(`Modo Producción: Configurando webhook en: ${backendUrl}${secretPath}`);
     bot.telegram.setWebhook(`${backendUrl}${secretPath}`);
-  } else { console.warn('RENDER_EXTERNAL_URL no definida. Iniciando en modo polling para desarrollo.'); bot.launch(); }
+  } else { 
+    console.warn('Modo Desarrollo: Iniciando en modo polling.'); 
+    bot.launch(); 
+    // Aseguramos que el bot se detenga limpiamente SOLO en modo desarrollo (polling).
+    process.once('SIGINT', () => bot.stop('SIGINT'));
+    process.once('SIGTERM', () => bot.stop('SIGTERM'));
+  }
 });
 
-bot.catch((err, ctx) => console.error(`Error para ${ctx.updateType}`, err));
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+bot.catch((err, ctx) => console.error(`Error de Telegraf para ${ctx.updateType}`, err));
+
+// Ya no necesitamos las llamadas a process.once aquí fuera, las hemos movido
+// dentro de la condición del modo desarrollo.
