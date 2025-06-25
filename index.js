@@ -35,12 +35,10 @@ bot.start((ctx) => {
 // (Aquí irán tus comandos de admin en el futuro)
 
 // --- CONFIGURACIÓN DEL WEBHOOK ---
-// Creamos una ruta secreta para el webhook usando el token del bot.
-// Esto evita que cualquiera pueda enviar actualizaciones falsas a nuestro bot.
+// --- ¡AQUÍ ESTÁ LA CORRECCIÓN! ---
+// Usamos backticks () para crear un template string correctamente.
 const secretPath = /telegraf/${bot.token};
 
-// Le decimos a Express que use el middleware de Telegraf en esa ruta secreta.
-// Cada vez que Telegram envíe una actualización a esta ruta, Telegraf la procesará.
 app.use(bot.webhookCallback(secretPath));
 
 // --- RUTAS DE LA API ---
@@ -51,7 +49,7 @@ app.use('/api/users', userRoutes);
 // --- INICIO DEL SERVIDOR ---
 app.listen(PORT, () => {
   console.log(🚀 Servidor Express corriendo en el puerto ${PORT});
-  // Una vez que el servidor está corriendo, le decimos a Telegram dónde enviar los webhooks.
+  
   const backendUrl = process.env.RENDER_EXTERNAL_URL;
   if (backendUrl) {
       console.log(Configurando webhook para Telegram en: ${backendUrl}${secretPath});
@@ -63,7 +61,7 @@ app.listen(PORT, () => {
 
 // Manejo de errores del bot
 bot.catch((err, ctx) => {
-  console.error(Error para ${ctx.updateType}, err);
+  console.error(Error para ${ctx.updateType}`, err);
 });
 
 // Aseguramos que el proceso no termine por errores inesperados
