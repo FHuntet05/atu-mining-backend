@@ -36,8 +36,8 @@ bot.start((ctx) => {
 
 // --- CONFIGURACIÓN DEL WEBHOOK ---
 // --- ¡AQUÍ ESTÁ LA CORRECCIÓN! ---
-// Usamos backticks () para crear un template string correctamente.
-    const secretPath = `/telegraf/${bot.token}`;
+// Usamos backticks (`) para crear un template string correctamente.
+const secretPath = `/telegraf/${bot.token}`;
 
 app.use(bot.webhookCallback(secretPath));
 
@@ -53,7 +53,7 @@ app.listen(PORT, () => {
   const backendUrl = process.env.RENDER_EXTERNAL_URL;
   if (backendUrl) {
       console.log(`Configurando webhook para Telegram en: ${backendUrl}${secretPath}`);
-      bot.telegram.setWebhook(${backendUrl}${secretPath});
+      bot.telegram.setWebhook(`${backendUrl}${secretPath}`);
   } else {
       console.warn('Advertencia: RENDER_EXTERNAL_URL no está definida. No se pudo configurar el webhook. El bot no funcionará en producción.');
   }
@@ -61,7 +61,7 @@ app.listen(PORT, () => {
 
 // Manejo de errores del bot
 bot.catch((err, ctx) => {
-  console.error(Error para ${ctx.updateType}`, err);
+  console.error(`Error para ${ctx.updateType}`, err);
 });
 
 // Aseguramos que el proceso no termine por errores inesperados
