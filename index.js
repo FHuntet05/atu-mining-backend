@@ -48,7 +48,7 @@ app.use('/api/users', userRoutes);
 
 // --- INICIO DEL SERVIDOR ---
 app.listen(PORT, () => {
-  console.log(🚀 Servidor Express corriendo en el puerto ${PORT});
+  console.log(`🚀 Servidor Express corriendo en el puerto` ${PORT});
   
   const backendUrl = process.env.RENDER_EXTERNAL_URL;
   if (backendUrl) {
