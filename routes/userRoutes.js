@@ -1,5 +1,4 @@
 // En: atu-mining-backend/routes/userRoutes.js
-
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
@@ -12,21 +11,15 @@ router.post('/sync', async (req, res) => {
     let user = await User.findOne({ telegramId: id });
 
     if (!user) {
-      const referrerId = start_param ? parseInt(start_param, 10) : null;
-      
+      const referrerId = start_param ? parseInt(start_param.split('_')[1], 10) : null;
       user = new User({
-        telegramId: id,
-        username: username,
-        firstName: first_name,
-        photoUrl: photo_url,
-        referrerId: referrerId
+        telegramId: id, username, firstName: first_name, photoUrl: photo_url,
+        referrerId: (referrerId && !isNaN(referrerId)) ? referrerId : null
       });
       await user.save();
-
       if (referrerId && !isNaN(referrerId)) {
         await User.updateOne({ telegramId: referrerId }, { $addToSet: { referrals: id } });
       }
-
     } else {
       user.username = username || user.username;
       user.firstName = first_name || user.firstName;
@@ -39,5 +32,4 @@ router.post('/sync', async (req, res) => {
     res.status(500).json({ message: 'Error interno del servidor.' });
   }
 });
-
 module.exports = router;
