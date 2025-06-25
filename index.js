@@ -96,7 +96,7 @@ app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/mining', require('./routes/miningRoutes'));
 app.use('/api/tasks', require('./routes/taskRoutes'));
 app.use('/api/referrals', require('./routes/referralRoutes'));
-
+app.use('/api/boosts', require('./routes/boostRoutes')); // Rutas para boosts
 const secretPath = `/telegraf/${bot.token}`;
 app.use(bot.webhookCallback(secretPath));
 
