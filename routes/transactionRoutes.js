@@ -6,11 +6,11 @@ const Transaction = require('../models/Transaction');
 router.get('/:telegramId', async (req, res) => {
     try {
         const { telegramId } = req.params;
-        const transactions = await Transaction.find({ telegramId: telegramId }).sort({ createdAt: -1 }).limit(50);
+        const transactions = await Transaction.find({ telegramId }).sort({ createdAt: -1 }).limit(50);
         res.status(200).json(transactions);
     } catch (error) {
-        console.error('Error al obtener historial:', error);
-        res.status(500).json({ message: 'Error del servidor.' });
+        res.status(500).json({ message: 'Error al obtener transacciones' });
     }
 });
+
 module.exports = router;
