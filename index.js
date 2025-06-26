@@ -61,6 +61,7 @@ app.use('/api/webhooks', webhookRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/withdrawal', withdrawalRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
+app.use('/api/exchange', require('./routes/exchangeRoutes'));
 
 const startServer = async () => {
     try {
