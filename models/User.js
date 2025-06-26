@@ -11,10 +11,12 @@ const userSchema = new mongoose.Schema({
   lastClaim: { type: Date, default: Date.now },
   boostYieldPerHour: { type: Number, default: 0 },
   totalMinedAUT: { type: Number, default: 0 },
-  referrerId: { type: Number, default: null },
-  referrals: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  
+  referrerId: { type: Number, default: null }, // Guardamos el telegramId del referente
+  referrals: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // Guardamos el _id del referido
   activeReferrals: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   referralEarnings: { type: Number, default: 0 },
+  
   completedTasks: [{ type: Number }],
   lastWithdrawalRequest: { type: Date, default: null },
 }, { timestamps: true });
