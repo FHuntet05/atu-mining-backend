@@ -1,118 +1,143 @@
-// En: atu-mining-backend/index.js
-// CÓDIGO COMPLETO Y FINAL CON EL VIGILANTE DE TRANSACCIONES
-
 require('dotenv').config();
-const express = require('express');
+const { Telegraf, Markup } = require('telegraf');
 const mongoose = require('mongoose');
-const cors = require('cors');
-const { Telegraf, session } = require('telegraf');
-
-// --- MODELOS ---
 const User = require('./models/User');
+const transactionService = require('./services/transaction.service');
+const { setupRoutes } = require('./routes');
+const express = require('express');
+const cors = require('cors');
 
-// --- RUTAS ---
-const userRoutes = require('./routes/userRoutes');
-const miningRoutes = require('./routes/miningRoutes');
-const taskRoutes = require('./routes/taskRoutes');
-const referralRoutes = require('./routes/referralRoutes');
-const boostRoutes = require('./routes/boostRoutes');
-const transactionRoutes = require('./routes/transactionRoutes');
-const paymentRoutes = require('./routes/paymentRoutes');
-const withdrawalRoutes = require('./routes/withdrawalRoutes');
-const leaderboardRoutes = require('./routes/leaderboardRoutes');
-
-// --- SERVICIOS ---
-const { startTransactionScanner } = require('./services/transaction.service'); // Importamos nuestro vigilante
-
-// --- INICIALIZACIÓN DE EXPRESS ---
+// --- Configuración de la App Express ---
 const app = express();
-const PORT = process.env.PORT || 10000;
 app.use(cors());
 app.use(express.json());
 
-// --- CONFIGURACIÓN DE TELEGRAF ---
+// --- Conexión a la Base de Datos ---
+mongoose.connect(process.env.DATABASE_URL)
+  .then(() => console.log('MongoDB conectado exitosamente.'))
+  .catch(err => console.error('Error de conexión a MongoDB:', err));
+
+// --- Inicialización del Bot de Telegram ---
 const bot = new Telegraf(process.env.BOT_TOKEN);
-app.locals.bot = bot;
-bot.use(session());
 
-// --- LÓGICA DEL BOT ---
-bot.use(async (ctx, next) => {
-    if (ctx.from) {
-        try {
-            const photos = await ctx.telegram.getUserProfilePhotos(ctx.from.id, 0, 1);
-            const photoUrl = photos.total_count > 0 ? await ctx.telegram.getFileLink(photos.photos[0][0].file_id) : null;
-            await User.updateOne(
-                { telegramId: ctx.from.id }, 
-                { $set: { username: ctx.from.username, firstName: ctx.from.first_name, photoUrl: photoUrl ? photoUrl.href : null } }, 
-                { upsert: true }
-            );
-        } catch (e) { console.error("Error en middleware de usuario:", e); }
-    }
-    return next();
-});
-
+// --- INICIO DE MODIFICACIÓN: Comando /start y lógica de referidos ---
 bot.start(async (ctx) => {
-    const miniAppUrl = process.env.MINI_APP_URL;
-    if (!miniAppUrl) return ctx.reply('La aplicación no está configurada correctamente.');
-    ctx.reply('¡Bienvenido a ATU Mining!', {
-        reply_markup: {
-            inline_keyboard: [[{ text: '🚀 Abrir App de Minería', web_app: { url: miniAppUrl } }]]
+  try {
+    const telegramId = ctx.from.id;
+    const firstName = ctx.from.first_name || 'Usuario';
+    const username = ctx.from.username;
+    
+    let user = await User.findOne({ telegramId });
+    const startPayload = ctx.startPayload;
+
+    // Lógica para crear nuevo usuario y manejar referidos
+    if (!user) {
+      let referrer = null;
+      if (startPayload) {
+        referrer = await User.findOne({ telegramId: startPayload });
+        if (referrer) {
+          // --- Lógica para Misión #3: Invitar a 10 usuarios ---
+          referrer.missions.invitedUsersCount = (referrer.missions.invitedUsersCount || 0) + 1;
+          
+          // Verificar si alcanzó la meta y no ha reclamado la recompensa
+          if (referrer.missions.invitedUsersCount === 10 && !referrer.missions.claimedInviteReward) {
+            const rewardAmount = 5000; // Recompensa por invitar a 10 usuarios
+            referrer.autBalance += rewardAmount;
+            referrer.missions.claimedInviteReward = true;
+            await bot.telegram.sendMessage(referrer.telegramId, 
+              `🎉 ¡Felicidades! Has invitado a 10 usuarios y ganaste una recompensa de ${rewardAmount} AUT.`
+            ).catch(e => console.error(`No se pudo notificar al referente ${referrer.telegramId}:`, e));
+          }
+          await referrer.save();
         }
-    });
-});
-// (Aquí puedes añadir más lógica de bot como bot.on('callback_query'), etc.)
+      }
 
-
-// --- REGISTRO DE RUTAS DE LA API ---
-app.use('/api/users', userRoutes);
-app.use('/api/mining', miningRoutes);
-app.use('/api/tasks', taskRoutes);
-app.use('/api/referrals', referralRoutes);
-app.use('/api/boosts', boostRoutes);
-app.use('/api/transactions', transactionRoutes);
-app.use('/api/payment', paymentRoutes);
-app.use('/api/withdrawal', withdrawalRoutes);
-app.use('/api/leaderboard', leaderboardRoutes);
-
-// --- ARRANQUE DEL SERVIDOR Y SERVICIOS ---
-const startServer = async () => {
-    try {
-        await mongoose.connect(process.env.DATABASE_URL);
-        console.log('✅ Conectado a MongoDB.');
-
-        // ¡INICIAMOS NUESTRO VIGILANTE DE TRANSACCIONES!
-        startTransactionScanner(bot);
-
-        const backendUrl = process.env.RENDER_EXTERNAL_URL;
-        const secretPath = `/telegraf/${bot.token}`;
-
-        if (backendUrl) {
-            await bot.telegram.setWebhook(`${backendUrl}${secretPath}`);
-            console.log(`✅ Webhook de Telegraf configurado.`);
-        }
-        
-        app.use(bot.webhookCallback(secretPath));
-
-        app.listen(PORT, () => {
-            console.log(`🚀 Servidor Express corriendo en el puerto ${PORT}.`);
-        });
-
-        if (!backendUrl) {
-            console.warn('Modo Desarrollo: Iniciando bot en modo polling.');
-            bot.launch();
-        }
-
-    } catch (error) {
-        console.error('❌ FALLO CRÍTICO AL INICIAR:', error);
-        process.exit(1);
+      user = new User({
+        telegramId,
+        firstName,
+        username,
+        referrerId: referrer ? referrer._id : null
+      });
+      await user.save();
+      
+      if(referrer) {
+        referrer.referrals.push(user._id);
+        await referrer.save();
+      }
     }
-};
+    
+    // Mensaje de bienvenida profesional
+    const welcomeMessage = `¡Bienvenido a ATU Mining, ${firstName}! 🚀\n\n` +
+      `Estás a punto de entrar a nuestro ecosistema de minería gamificada.\n\n` +
+      `🔹 Mina nuestro token interno: AUT.\n` +
+      `🔹 Intercámbialo por dinero real: 10,000 AUT = 1 USDT.\n` +
+      `🔹 Acelera tu producción con Boosts.\n\n` +
+      `💰 **Retiros:** El monto mínimo de retiro es de 1 USDT (red BEP20). Puedes solicitar un retiro cada 24 horas.\n\n` +
+      `¡Haz clic abajo para empezar a minar ahora! 👇`;
 
-startServer();
+    await ctx.reply(welcomeMessage, {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "💎 Abrir Minero", web_app: { url: process.env.MINI_APP_URL } }]
+        ]
+      }
+    });
 
-// --- MANEJO DE ERRORES Y SEÑALES ---
-bot.catch((err, ctx) => console.error(`Error de Telegraf para ${ctx.updateType}:`, err));
-if (process.env.NODE_ENV !== 'production') {
-    process.once('SIGINT', () => bot.stop('SIGINT'));
-    process.once('SIGTERM', () => bot.stop('SIGTERM'));
-}
+  } catch (error) {
+    console.error('Error en el comando /start:', error);
+    ctx.reply('Ocurrió un error al procesar tu solicitud. Por favor, intenta de nuevo.');
+  }
+});
+// --- FIN DE MODIFICACIÓN ---
+
+// --- INICIO DE NUEVA FUNCIONALIDAD: Misión #1 - Unirse al grupo ---
+bot.on('new_chat_members', async (ctx) => {
+  const groupId = process.env.TELEGRAM_GROUP_ID || '-1002278930402';
+  
+  // Salir si el evento no es del grupo configurado
+  if (ctx.chat.id.toString() !== groupId) {
+    return;
+  }
+
+  try {
+    for (const member of ctx.message.new_chat_members) {
+      // Ignorar si el nuevo miembro es el propio bot
+      if (member.is_bot) continue;
+
+      const user = await User.findOne({ telegramId: member.id });
+
+      // Si el usuario existe en nuestra DB y no ha completado la misión
+      if (user && !user.missions.joinedGroup) {
+        const rewardAmount = 500; // Recompensa por unirse
+        user.autBalance = (user.autBalance || 0) + rewardAmount;
+        user.missions.joinedGroup = true;
+        await user.save();
+        
+        // Notificar al usuario en privado (con manejo de errores)
+        await bot.telegram.sendMessage(member.id, 
+          `🎉 ¡Gracias por unirte a nuestra comunidad! Has sido recompensado con ${rewardAmount} AUT.`
+        ).catch(e => console.error(`No se pudo notificar al usuario ${member.id} sobre la recompensa del grupo:`, e));
+      }
+    }
+  } catch (error) {
+    console.error('Error al procesar nuevos miembros del grupo:', error);
+  }
+});
+// --- FIN DE NUEVA FUNCIONALIDAD ---
+
+// --- Rutas de la API y Lanzamiento ---
+setupRoutes(app);
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Servidor Express escuchando en el puerto ${PORT}`);
+  transactionService.startCheckingTransactions(bot); // Inicia el vigilante de BscScan
+});
+
+bot.launch(() => {
+  console.log('Bot de Telegram iniciado.');
+});
+
+// Habilitar cierre gradual
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));

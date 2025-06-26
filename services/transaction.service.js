@@ -1,58 +1,105 @@
-// En: atu-mining-backend/services/transaction.service.js
+require('dotenv').config();
 const axios = require('axios');
+const cron = require('node-cron');
 const User = require('../models/User');
 const Payment = require('../models/Payment');
 const Transaction = require('../models/Transaction');
 
-const API_KEY = process.env.BSCSCAN_API_KEY;
-const WALLET_ADDRESS = process.env.DEPOSIT_WALLET_ADDRESS;
-const USDT_CONTRACT = '0x55d398326f99059fF775485246999027B3197955'; // Contrato de USDT en BSC
+const BSCSCAN_API_KEY = process.env.BSCSCAN_API_KEY;
+const DEPOSIT_WALLET_ADDRESS = process.env.DEPOSIT_WALLET_ADDRESS;
+const BSCSCAN_API_URL = `https://api.bscscan.com/api?module=account&action=txlist&address=${DEPOSIT_WALLET_ADDRESS}&startblock=0&endblock=99999999&sort=desc&apikey=${BSCSCAN_API_KEY}`;
 
-async function checkIncomingTransactions(bot) {
-    try {
-        const url = `https://api.bscscan.com/api?module=account&action=tokentx&contractaddress=${USDT_CONTRACT}&address=${WALLET_ADDRESS}&page=1&offset=100&sort=desc&apikey=${API_KEY}`;
-        const response = await axios.get(url);
+let botInstance; // Para mantener la instancia del bot y poder enviar notificaciones
 
-        if (response.data.status !== "1") return;
-
-        for (const tx of response.data.result) {
-            // Buscamos transacciones entrantes a nuestra wallet
-            if (tx.to.toLowerCase() === WALLET_ADDRESS.toLowerCase()) {
-                const txHash = tx.hash;
-                const amount = parseFloat(tx.value) / 1e18; // USDT tiene 18 decimales
-                const uniqueAmount = parseFloat(amount.toFixed(8));
-
-                // Buscamos una orden de pago pendiente con ese monto único
-                const pendingPayment = await Payment.findOne({ uniqueAmount, status: 'pending' });
-
-                if (pendingPayment) {
-                    pendingPayment.status = 'completed';
-                    await pendingPayment.save();
-
-                    // Acreditar saldo y notificar
-                    const user = await User.findOneAndUpdate(
-                        { telegramId: pendingPayment.telegramId },
-                        { $inc: { usdtBalance: pendingPayment.baseAmount } },
-                        { new: true }
-                    );
-                    
-                    if (user) {
-                        await new Transaction({ telegramId: user.telegramId, type: 'deposit', description: 'Depósito USDT (BEP20)', amount: `+${pendingPayment.baseAmount.toFixed(2)} USDT` }).save();
-                        await bot.telegram.sendMessage(user.telegramId, `✅ ¡VIP ACTIVADO AUTOMÁTICAMENTE!\n👤 *Usuario:* \`${user.telegramId}\`\n💰 *Pago:* ${pendingPayment.baseAmount.toFixed(2)} USDT`);
-                        
-                        // Aquí iría tu lógica de referidos...
-                    }
-                }
-            }
-        }
-    } catch (error) {
-        console.error("Error al verificar transacciones:", error.message);
+// Función para verificar periódicamente las transacciones
+async function checkIncomingTransactions() {
+  try {
+    // Buscar pagos pendientes en nuestra base de datos
+    const pendingPayments = await Payment.find({ status: 'pending' });
+    if (pendingPayments.length === 0) {
+      // console.log('No hay pagos pendientes por verificar.');
+      return;
     }
+
+    // Obtener las últimas transacciones de la wallet desde BscScan
+    const response = await axios.get(BSCSCAN_API_URL);
+    if (response.data.status !== '1') {
+      console.error('Error al obtener transacciones de BscScan:', response.data.message);
+      return;
+    }
+    const transactions = response.data.result;
+
+    // Procesar cada pago pendiente
+    for (const payment of pendingPayments) {
+      // Buscar una transacción en BscScan que coincida con el monto único
+      const matchedTx = transactions.find(tx => 
+        tx.to.toLowerCase() === DEPOSIT_WALLET_ADDRESS.toLowerCase() &&
+        (Number(tx.value) / 1e18).toFixed(6) === payment.uniqueAmount.toFixed(6)
+      );
+
+      if (matchedTx) {
+        // --- TRANSACCIÓN ENCONTRADA Y CONFIRMADA ---
+        const user = await User.findById(payment.userId).populate('referrerId');
+        if (!user) {
+          console.error(`Usuario no encontrado para el pago ${payment._id}`);
+          continue;
+        }
+
+        // 1. Marcar el pago como completado
+        payment.status = 'completed';
+        payment.txHash = matchedTx.hash;
+        await payment.save();
+
+        // 2. Acreditar el saldo base (USDT) al usuario
+        user.usdtBalance += payment.baseAmount;
+
+        // 3. Crear un registro de la transacción
+        await Transaction.create({
+          userId: user._id,
+          type: 'deposit',
+          amount: payment.baseAmount,
+          currency: 'USDT',
+          status: 'completed',
+          details: `Depósito confirmado vía BscScan. TxHash: ${matchedTx.hash}`
+        });
+
+        // --- INICIO DE MODIFICACIÓN: Lógica para Misión #2 - Comprar un Boost ---
+        let missionReward = 0;
+        if (!user.missions.firstBoostPurchased) {
+            missionReward = 1000; // Recompensa por la primera compra
+            user.autBalance = (user.autBalance || 0) + missionReward;
+            user.missions.firstBoostPurchased = true;
+        }
+        // --- FIN DE MODIFICACIÓN ---
+
+        // 4. Lógica de comisiones para referidos (si aplica)
+        // ... (Tu lógica de comisiones multinivel existente va aquí) ...
+
+        await user.save();
+
+        // 5. Notificar al usuario sobre el éxito
+        let successMessage = `✅ ¡Tu depósito de ${payment.baseAmount} USDT ha sido acreditado exitosamente!`;
+        if (missionReward > 0) {
+            successMessage += `\n\n🚀 ¡Felicidades por tu primera compra! Como recompensa, has recibido ${missionReward} AUT extra.`;
+        }
+        if (botInstance) {
+          await botInstance.telegram.sendMessage(user.telegramId, successMessage)
+            .catch(e => console.error(`No se pudo notificar al usuario ${user.telegramId} sobre el depósito:`, e));
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error en checkIncomingTransactions:', error);
+  }
 }
 
-function startTransactionScanner(bot) {
-    console.log('🚀 Vigilante de transacciones iniciado. Verificando cada 20 segundos.');
-    setInterval(() => checkIncomingTransactions(bot), 20000); // Cada 20 segundos
+// Función para iniciar el cron job
+function startCheckingTransactions(bot) {
+  botInstance = bot; // Guardar la instancia del bot
+  console.log('Iniciando el vigilante de transacciones de BscScan (cada 20 segundos)...');
+  cron.schedule('*/20 * * * * *', checkIncomingTransactions);
 }
 
-module.exports = { startTransactionScanner };
+module.exports = {
+  startCheckingTransactions,
+};
