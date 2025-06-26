@@ -2,10 +2,10 @@
   "name": "atu-mining-backend",
   "version": "1.0.0",
   "description": "Backend para la Mini App de Telegram ATU Mining USDT",
-  "main": "src/index.js",
+  "main": "index.js",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "nodemon src/index.js"
+    "start": "node index.js",
+    "dev": "nodemon index.js"
   },
   "author": "FHuntet05",
   "license": "ISC",
