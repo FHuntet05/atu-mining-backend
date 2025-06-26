@@ -25,5 +25,6 @@ router.use('/transactions', transactionRoutes);
 router.use('/withdrawals', withdrawalRoutes);
 router.use('/leaderboard', leaderboardRoutes);
 
+
 // Exportar el enrutador principal que contiene todas las rutas
 module.exports = router;

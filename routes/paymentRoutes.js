@@ -1,9 +1,10 @@
 // En: atu-mining-backend/routes/paymentRoutes.js
 const express = require('express');
 const router = express.Router();
-const Payment = require('../models/Payment');
+const paymentController = require('../controllers/paymentController');
 
-router.post('/create', async (req, res) => {
+
+router.post('/create', paymentController.createPaymentOrder) => {
     try {
         const { telegramId, boostId, amount } = req.body;
         // Generamos un "polvo" decimal aleatorio
