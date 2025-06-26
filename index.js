@@ -7,11 +7,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const { Telegraf, session } = require('telegraf');
 
-// --- MODELOS ---
 const User = require('./models/User');
-// (No es necesario importar todos los modelos aquí, las rutas ya lo hacen)
-
-// --- RUTAS ---
 const userRoutes = require('./routes/userRoutes');
 const miningRoutes = require('./routes/miningRoutes');
 const taskRoutes = require('./routes/taskRoutes');
@@ -19,54 +15,40 @@ const referralRoutes = require('./routes/referralRoutes');
 const boostRoutes = require('./routes/boostRoutes');
 const transactionRoutes = require('./routes/transactionRoutes');
 const webhookRoutes = require('./routes/webhookRoutes');
-const paymentRoutes = require('./routes/paymentRoutes'); // Importamos la nueva ruta de pagos
+const paymentRoutes = require('./routes/paymentRoutes');
+const withdrawalRoutes = require('./routes/withdrawalRoutes'); // Nueva ruta
+const leaderboardRoutes = require('./routes/leaderboardRoutes'); // Nueva ruta
 
-// --- INICIALIZACIÓN DE EXPRESS ---
 const app = express();
 const PORT = process.env.PORT || 10000;
-
-// --- MIDDLEWARES GLOBALES ---
 app.use(cors());
 app.use(express.json());
 
-// --- CONFIGURACIÓN DE TELEGRAF ---
 const bot = new Telegraf(process.env.BOT_TOKEN);
-app.locals.bot = bot; // Hacemos el bot accesible para que las rutas lo puedan usar
+app.locals.bot = bot;
 bot.use(session());
 
-// --- LÓGICA DEL BOT ---
-
-// Middleware para actualizar datos básicos del usuario en cada interacción
 bot.use(async (ctx, next) => {
     if (ctx.from) {
         try {
-            await User.updateOne({ telegramId: ctx.from.id }, { $set: { username: ctx.from.username, firstName: ctx.from.first_name } }, { upsert: true });
+            await User.updateOne({ telegramId: ctx.from.id }, { $set: { username: ctx.from.username, firstName: ctx.from.first_name, photoUrl: ctx.from.photo_url } }, { upsert: true });
         } catch (e) { console.error("Error en middleware de usuario:", e); }
     }
     return next();
 });
 
-// Comando /start
 bot.start(async (ctx) => {
     const miniAppUrl = process.env.MINI_APP_URL;
     if (!miniAppUrl) {
-        console.error("MINI_APP_URL no está definida en las variables de entorno.");
-        return ctx.reply('La aplicación no está configurada correctamente. Por favor, contacta a soporte.');
+        return ctx.reply('La aplicación no está configurada correctamente.');
     }
-    // ... (Lógica de referido si existe)
     ctx.reply('¡Bienvenido a ATU Mining!', {
         reply_markup: {
-            inline_keyboard: [[{ 
-                text: '🚀 Abrir App de Minería', 
-                web_app: { url: miniAppUrl } 
-            }]]
+            inline_keyboard: [[{ text: '🚀 Abrir App de Minería', web_app: { url: miniAppUrl } }]]
         }
     });
 });
 
-// (Aquí iría cualquier otra lógica del bot, como 'bot.on', etc. si la tuvieras)
-
-// --- REGISTRO DE RUTAS DE LA API ---
 app.use('/api/users', userRoutes);
 app.use('/api/mining', miningRoutes);
 app.use('/api/tasks', taskRoutes);
@@ -74,7 +56,10 @@ app.use('/api/referrals', referralRoutes);
 app.use('/api/boosts', boostRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/webhooks', webhookRoutes);
-app.use('/api/payment', paymentRoutes); // Registramos la nueva ruta
+app.use('/api/payment', paymentRoutes);
+app.use('/api/withdrawal', withdrawalRoutes); // Registramos la ruta
+app.use('/api/leaderboard', leaderboardRoutes); // Registramos la ruta
+
 
 // --- ARRANQUE DEL SERVIDOR Y WEBHOOK DE TELEGRAF ---
 const startServer = async () => {
