@@ -1,6 +1,4 @@
 // En: atu-mining-backend/routes/webhookRoutes.js
-// CÓDIGO COMPLETO Y REVISADO
-
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
@@ -8,7 +6,7 @@ const Payment = require('../models/Payment');
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 
-const REFERRAL_BONUS_USDT = 0.5; // Asegúrate que este valor coincida
+const REFERRAL_BONUS_USDT = 0.5;
 
 router.post('/nowpayments', async (req, res) => {
     const ipnSecret = process.env.NOWPAYMENTS_IPN_SECRET;
@@ -66,4 +64,5 @@ router.post('/nowpayments', async (req, res) => {
         res.status(500).send('Error interno.');
     }
 });
+
 module.exports = router;

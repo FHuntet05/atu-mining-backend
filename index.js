@@ -1,6 +1,4 @@
 // En: atu-mining-backend/index.js
-// CÓDIGO COMPLETO Y FINAL (sin omisiones)
-
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
@@ -31,10 +29,8 @@ bot.use(session());
 bot.use(async (ctx, next) => {
     if (ctx.from) {
         try {
-            // Obtenemos la foto del usuario
             const photos = await ctx.telegram.getUserProfilePhotos(ctx.from.id, 0, 1);
             const photoUrl = photos.total_count > 0 ? await ctx.telegram.getFileLink(photos.photos[0][0].file_id) : null;
-
             await User.updateOne(
                 { telegramId: ctx.from.id }, 
                 { $set: { username: ctx.from.username, firstName: ctx.from.first_name, photoUrl: photoUrl ? photoUrl.href : null } }, 

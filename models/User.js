@@ -1,6 +1,4 @@
 // En: atu-mining-backend/models/User.js
-// CÓDIGO COMPLETO Y ACTUALIZADO
-
 const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
@@ -15,15 +13,13 @@ const userSchema = new mongoose.Schema({
   boostYieldPerHour: { type: Number, default: 0 },
   totalMinedAUT: { type: Number, default: 0 },
   
-  // Lógica de referidos actualizada
   referrerId: { type: Number, default: null },
-  referrals: [{ type: Number }], // Todos los que se unen
-  activeReferrals: [{ type: Number }], // Solo los que han depositado
-  referralEarnings: { type: Number, default: 0 }, // Ganancias totales por referidos
+  referrals: [{ type: Number }],
+  activeReferrals: [{ type: Number }],
+  referralEarnings: { type: Number, default: 0 },
   
   completedTasks: [{ type: Number }],
   
-  // Nuevo campo para el enfriamiento de retiros
   lastWithdrawalRequest: { type: Date, default: null },
 
 }, { timestamps: true });
