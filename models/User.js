@@ -19,6 +19,7 @@ const userSchema = new mongoose.Schema({
   referrerId: { type: Number, default: null },
   referrals: [{ type: Number }], // Todos los que se unen
   activeReferrals: [{ type: Number }], // Solo los que han depositado
+  referralEarnings: { type: Number, default: 0 }, // Ganancias totales por referidos
   
   completedTasks: [{ type: Number }],
   

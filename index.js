@@ -1,5 +1,5 @@
 // En: atu-mining-backend/index.js
-// CÓDIGO COMPLETO Y FINAL
+// CÓDIGO COMPLETO Y FINAL (sin omisiones)
 
 require('dotenv').config();
 const express = require('express');
@@ -16,8 +16,8 @@ const boostRoutes = require('./routes/boostRoutes');
 const transactionRoutes = require('./routes/transactionRoutes');
 const webhookRoutes = require('./routes/webhookRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
-const withdrawalRoutes = require('./routes/withdrawalRoutes'); // Nueva ruta
-const leaderboardRoutes = require('./routes/leaderboardRoutes'); // Nueva ruta
+const withdrawalRoutes = require('./routes/withdrawalRoutes');
+const leaderboardRoutes = require('./routes/leaderboardRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -31,7 +31,15 @@ bot.use(session());
 bot.use(async (ctx, next) => {
     if (ctx.from) {
         try {
-            await User.updateOne({ telegramId: ctx.from.id }, { $set: { username: ctx.from.username, firstName: ctx.from.first_name, photoUrl: ctx.from.photo_url } }, { upsert: true });
+            // Obtenemos la foto del usuario
+            const photos = await ctx.telegram.getUserProfilePhotos(ctx.from.id, 0, 1);
+            const photoUrl = photos.total_count > 0 ? await ctx.telegram.getFileLink(photos.photos[0][0].file_id) : null;
+
+            await User.updateOne(
+                { telegramId: ctx.from.id }, 
+                { $set: { username: ctx.from.username, firstName: ctx.from.first_name, photoUrl: photoUrl ? photoUrl.href : null } }, 
+                { upsert: true }
+            );
         } catch (e) { console.error("Error en middleware de usuario:", e); }
     }
     return next();
@@ -39,9 +47,7 @@ bot.use(async (ctx, next) => {
 
 bot.start(async (ctx) => {
     const miniAppUrl = process.env.MINI_APP_URL;
-    if (!miniAppUrl) {
-        return ctx.reply('La aplicación no está configurada correctamente.');
-    }
+    if (!miniAppUrl) return ctx.reply('La aplicación no está configurada correctamente.');
     ctx.reply('¡Bienvenido a ATU Mining!', {
         reply_markup: {
             inline_keyboard: [[{ text: '🚀 Abrir App de Minería', web_app: { url: miniAppUrl } }]]
@@ -57,50 +63,29 @@ app.use('/api/boosts', boostRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/payment', paymentRoutes);
-app.use('/api/withdrawal', withdrawalRoutes); // Registramos la ruta
-app.use('/api/leaderboard', leaderboardRoutes); // Registramos la ruta
+app.use('/api/withdrawal', withdrawalRoutes);
+app.use('/api/leaderboard', leaderboardRoutes);
 
-
-// --- ARRANQUE DEL SERVIDOR Y WEBHOOK DE TELEGRAF ---
 const startServer = async () => {
     try {
         await mongoose.connect(process.env.DATABASE_URL);
         console.log('✅ Conectado a MongoDB.');
-
         const backendUrl = process.env.RENDER_EXTERNAL_URL;
         const secretPath = `/telegraf/${bot.token}`;
-
         if (backendUrl) {
-            console.log(`Modo Producción: Configurando webhook de Telegraf...`);
             await bot.telegram.setWebhook(`${backendUrl}${secretPath}`);
             console.log(`✅ Webhook de Telegraf configurado.`);
         }
-        
         app.use(bot.webhookCallback(secretPath));
-
-        app.listen(PORT, () => {
-            console.log(`🚀 Servidor Express corriendo en el puerto ${PORT}.`);
-        });
-
-        if (!backendUrl) {
-            console.warn('Modo Desarrollo: Iniciando bot en modo polling.');
-            bot.launch();
-        }
-
+        app.listen(PORT, () => console.log(`🚀 Servidor Express corriendo en el puerto ${PORT}.`));
+        if (!backendUrl) bot.launch();
     } catch (error) {
-        console.error('❌ FALLO CRÍTICO AL INICIAR EL SERVIDOR:', error);
+        console.error('❌ FALLO CRÍTICO AL INICIAR:', error);
         process.exit(1);
     }
 };
-
 startServer();
-
-// Manejo de errores globales de Telegraf
-bot.catch((err, ctx) => {
-    console.error(`Error global de Telegraf capturado para el update tipo ${ctx.updateType}:`, err)
-});
-
-// Manejo de señales de terminación para desarrollo local
+bot.catch((err, ctx) => console.error(`Error de Telegraf para ${ctx.updateType}:`, err));
 if (process.env.NODE_ENV !== 'production') {
     process.once('SIGINT', () => bot.stop('SIGINT'));
     process.once('SIGTERM', () => bot.stop('SIGTERM'));
