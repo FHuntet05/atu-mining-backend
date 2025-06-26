@@ -4,20 +4,16 @@ const User = require('../models/User');
 const Payment = require('../models/Payment');
 const DEPOSIT_WALLET_ADDRESS = process.env.DEPOSIT_WALLET_ADDRESS;
 
-// Ruta: POST /api/payment/create (usamos la ruta que tu frontend ya llama)
 router.post('/create', async (req, res) => {
     try {
-        // Tu frontend envía 'amount' en lugar de 'baseAmount'
-        const { telegramId, amount } = req.body; 
+        const { telegramId, amount } = req.body; // Adaptado a lo que envía tu frontend
 
         if (!telegramId || !amount || isNaN(amount) || amount <= 0) {
             return res.status(400).json({ message: 'Datos inválidos para crear la orden.' });
         }
 
         const user = await User.findOne({ telegramId });
-        if (!user) {
-            return res.status(404).json({ message: 'Usuario no encontrado.' });
-        }
+        if (!user) return res.status(404).json({ message: 'Usuario no encontrado.' });
         
         const existingPayment = await Payment.findOne({ 
             userId: user._id, 
@@ -27,7 +23,7 @@ router.post('/create', async (req, res) => {
 
         if (existingPayment) {
             return res.status(409).json({ 
-                message: 'Ya tienes una orden de pago pendiente. Complétala o espera a que expire.' 
+                message: 'Ya tienes una orden de pago pendiente. Complétala o espera.' 
             });
         }
 
@@ -44,7 +40,6 @@ router.post('/create', async (req, res) => {
 
         await newPayment.save();
         
-        // Devolvemos exactamente lo que `DepositModal.jsx` necesita
         res.status(201).json({
             uniqueAmount: newPayment.uniqueAmount,
             depositAddress: DEPOSIT_WALLET_ADDRESS,

@@ -9,7 +9,7 @@ const userSchema = new mongoose.Schema({
     usdtBalance: { type: Number, default: 0 },
     usdtForWithdrawal: { type: Number, default: 0 },
     lastClaim: { type: Date, default: Date.now },
-    boostYieldPerHour: { type: Number, default: 0 }, // CORRECCIÓN: El aumento inicial es 0
+    boostYieldPerHour: { type: Number, default: 0 }, // El valor por defecto es CERO
     storageCapacity: { type: Number, default: (350 / 24) * 8 },
     referrerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     referrals: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
@@ -25,9 +25,7 @@ const userSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 userSchema.statics.findOrCreate = async function(tgUser) {
-    if (!tgUser || !tgUser.id) {
-        throw new Error("Datos de usuario de Telegram inválidos.");
-    }
+    if (!tgUser || !tgUser.id) throw new Error("Datos de usuario de Telegram inválidos.");
     let user = await this.findOne({ telegramId: tgUser.id });
     if (!user) {
         user = new this({
@@ -35,7 +33,8 @@ userSchema.statics.findOrCreate = async function(tgUser) {
             firstName: tgUser.first_name || tgUser.firstName || 'Usuario',
             username: tgUser.username,
             photoUrl: tgUser.photo_url || tgUser.photoUrl,
-            boostYieldPerHour: 0, // CORRECCIÓN: Asignación explícita
+            // Asignamos explícitamente el valor inicial para que no haya dudas
+            boostYieldPerHour: 0,
         });
         await user.save();
     }

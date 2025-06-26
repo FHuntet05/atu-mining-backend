@@ -7,17 +7,17 @@ const COMMISSIONS = { level1: 0.30, level2: 0.15, level3: 0.075 };
 router.get('/:telegramId', async (req, res) => {
     try {
         const { telegramId } = req.params;
+        // La consulta con populate anidado es la forma más directa de obtener los datos
         const user = await User.findOne({ telegramId: parseInt(telegramId, 10) })
             .populate({
                 path: 'referrals', model: 'User',
-                populate: { path: 'referrals', model: 'User',
+                populate: {
+                    path: 'referrals', model: 'User',
                     populate: { path: 'referrals', model: 'User' }
                 }
             });
 
-        if (!user) {
-            return res.status(404).json({ message: 'Usuario no encontrado.' });
-        }
+        if (!user) return res.status(404).json({ message: 'Usuario no encontrado.' });
 
         const level1Users = user.referrals || [];
         const level2Users = level1Users.flatMap(l1 => l1.referrals || []);
