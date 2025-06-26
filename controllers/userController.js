@@ -47,9 +47,22 @@ const syncUser = async (req, res) => {
     } catch (error) {
         console.error('Error en syncUser:', error);
         res.status(500).json({ message: 'Error interno del servidor al sincronizar el usuario.' });
+        // --- INICIO DEL TEST DE LA VERDAD ---
+        // Convertimos el documento de Mongoose a un objeto plano para poder añadirle una propiedad
+        const userObject = populatedUser.toObject();
+        // Añadimos nuestra marca de versión
+        userObject.backendVersion = 'V_BACKEND_FINAL_Y_DEFINITIVO';
+        // --- FIN DEL TEST DE LA VERDAD ---
+        
+        // Enviamos el objeto modificado
+        res.status(200).json(userObject);
+
+    } catch (error) {
+        console.error('Error en syncUser:', error);
+        res.status(500).json({ message: 'Error interno del servidor al sincronizar el usuario.' });
     }
 };
-
+ 
 /**
  * Obtiene los datos de un usuario por su Telegram ID.
  * Esta función no ha cambiado, pero la dejamos aquí para mantener el controlador completo.
