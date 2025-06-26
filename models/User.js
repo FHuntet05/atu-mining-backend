@@ -1,6 +1,5 @@
 // En: atu-mining-backend/models/User.js
 const mongoose = require('mongoose');
-
 const userSchema = new mongoose.Schema({
   telegramId: { type: Number, required: true, unique: true, index: true },
   username: { type: String, trim: true },
@@ -12,16 +11,11 @@ const userSchema = new mongoose.Schema({
   lastClaim: { type: Date, default: Date.now },
   boostYieldPerHour: { type: Number, default: 0 },
   totalMinedAUT: { type: Number, default: 0 },
-  
   referrerId: { type: Number, default: null },
-  referrals: [{ type: Number }],
-  activeReferrals: [{ type: Number }],
+  referrals: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  activeReferrals: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   referralEarnings: { type: Number, default: 0 },
-  
   completedTasks: [{ type: Number }],
-  
   lastWithdrawalRequest: { type: Date, default: null },
-
 }, { timestamps: true });
-
 module.exports = mongoose.model('User', userSchema);
