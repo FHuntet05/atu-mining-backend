@@ -1,31 +1,17 @@
-// En: atu-mining-backend/routes/paymentRoutes.js
 const express = require('express');
 const router = express.Router();
+
+// Importamos el controlador que contiene la lógica de pagos.
 const paymentController = require('../controllers/paymentController');
 
+// --- INICIO DE CORRECCIÓN ---
+// La sintaxis correcta es pasar la referencia de la función directamente.
+// No se necesita "=>" ni "{}" aquí.
+router.post('/create', paymentController.createPaymentOrder);
+// --- FIN DE CORRECCIÓN ---
 
-router.post('/create', paymentController.createPaymentOrder) => {
-    try {
-        const { telegramId, boostId, amount } = req.body;
-        // Generamos un "polvo" decimal aleatorio
-        const randomDust = Math.floor(100000 + Math.random() * 900000) / 100000000; // ej. 0.00123456
-        const uniqueAmount = parseFloat((amount + randomDust).toFixed(8));
 
-        const newPayment = new Payment({
-            telegramId,
-            boostId,
-            baseAmount: amount,
-            uniqueAmount,
-            status: 'pending'
-        });
-        await newPayment.save();
+// Si en el futuro necesitamos verificar el estado de un pago, añadiríamos la ruta aquí.
+// Por ejemplo: router.get('/status/:orderId', paymentController.getPaymentStatus);
 
-        res.status(200).json({
-            depositAddress: process.env.DEPOSIT_WALLET_ADDRESS,
-            uniqueAmount: uniqueAmount
-        });
-    } catch (error) {
-        res.status(500).json({ message: 'Error al crear la orden de pago.' });
-    }
-});
 module.exports = router;
