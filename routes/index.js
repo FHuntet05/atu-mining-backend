@@ -8,20 +8,19 @@ const miningRoutes = require('./miningRoutes');
 const exchangeRoutes = require('./exchangeRoutes');
 const paymentRoutes = require('./paymentRoutes');
 const referralRoutes = require('./referralRoutes');
-const taskRoutes = require('./taskRoutes');
+const taskRoutes = require('./taskRoutes'); // Esta línea ya es correcta y usará el nuevo archivo.
 const transactionRoutes = require('./transactionRoutes');
 const withdrawalRoutes = require('./withdrawalRoutes');
 const leaderboardRoutes = require('./leaderboardRoutes');
 
 // Montar cada ruta en el enrutador principal
-// La URL base para todas estas rutas será /api
 router.use('/users', userRoutes);
 router.use('/boosts', boostRoutes);
 router.use('/mining', miningRoutes);
 router.use('/exchange', exchangeRoutes);
 router.use('/payments', paymentRoutes);
 router.use('/referrals', referralRoutes);
-router.use('/tasks', taskRoutes);
+router.use('/tasks', taskRoutes); // Esta línea ya es correcta.
 router.use('/transactions', transactionRoutes);
 router.use('/withdrawals', withdrawalRoutes);
 router.use('/leaderboard', leaderboardRoutes);
