@@ -3,32 +3,30 @@ const express = require('express');
 const router = express.Router();
 const { createPayment } = require('../services/nowpayments.service');
 const Payment = require('../models/Payment');
-const boostsConfig = require('../config/boosts'); // Reutilizamos la config de boosts
 
 router.post('/create', async (req, res) => {
     try {
-        const { telegramId, boostId } = req.body;
-        if (!telegramId || !boostId) return res.status(400).json({ message: 'Faltan datos.' });
-
-        const boost = boostsConfig.find(b => b.id === boostId);
-        if (!boost) return res.status(404).json({ message: 'Boost no encontrado.' });
+        const { telegramId, boostId, amount } = req.body;
+        if (!telegramId || !boostId || !amount || amount <= 0) {
+            return res.status(400).json({ message: 'Faltan datos o son inválidos.' });
+        }
 
         const newPayment = new Payment({
             telegramId,
-            boostId,
-            amount: boost.price,
+            boostId, // Guardamos el ID del boost para referencia
+            amount: amount,
             status: 'pending'
         });
         await newPayment.save();
 
-        const nowPaymentsInvoice = await createPayment(boost.price, newPayment._id.toString());
+        const nowPaymentsInvoice = await createPayment(amount, newPayment._id.toString());
         
-        // Guardamos el ID de NOWPayments para referencia futura
         newPayment.nowPaymentsId = nowPaymentsInvoice.payment_id;
         await newPayment.save();
 
         res.status(200).json(nowPaymentsInvoice);
     } catch (error) {
+        console.error("Error en la ruta /api/payment/create:", error);
         res.status(500).json({ message: error.message });
     }
 });
