@@ -1,51 +1,30 @@
 // En: atu-mining-backend/routes/paymentRoutes.js
 const express = require('express');
 const router = express.Router();
-const { createPayment } = require('../services/nowpayments.service');
 const Payment = require('../models/Payment');
-const boostsConfig = require('../config/boosts');
 
 router.post('/create', async (req, res) => {
     try {
         const { telegramId, boostId, amount } = req.body;
-        
-        // Validaciones más estrictas
-        if (!telegramId || !boostId || !amount) {
-            return res.status(400).json({ message: 'Faltan datos requeridos (telegramId, boostId, amount).' });
-        }
-        if (typeof amount !== 'number' || amount <= 0) {
-            return res.status(400).json({ message: 'El monto debe ser un número positivo.' });
-        }
-        
-        const boost = boostsConfig.find(b => b.id === boostId);
-        if (!boost) {
-            return res.status(404).json({ message: 'El boost seleccionado no existe.' });
-        }
+        // Generamos un "polvo" decimal aleatorio
+        const randomDust = Math.floor(100000 + Math.random() * 900000) / 100000000; // ej. 0.00123456
+        const uniqueAmount = parseFloat((amount + randomDust).toFixed(8));
 
         const newPayment = new Payment({
             telegramId,
             boostId,
-            amount, // El monto total ya viene calculado desde el frontend
+            baseAmount: amount,
+            uniqueAmount,
             status: 'pending'
         });
         await newPayment.save();
 
-        // Llamamos al servicio para crear la factura en NOWPayments
-        const nowPaymentsInvoice = await createPayment(amount, newPayment._id.toString());
-        
-        // Si la factura se crea, guardamos su ID de NOWPayments
-        if (nowPaymentsInvoice && nowPaymentsInvoice.payment_id) {
-            newPayment.nowPaymentsId = nowPaymentsInvoice.payment_id;
-            await newPayment.save();
-        }
-
-        res.status(200).json(nowPaymentsInvoice);
-
+        res.status(200).json({
+            depositAddress: process.env.DEPOSIT_WALLET_ADDRESS,
+            uniqueAmount: uniqueAmount
+        });
     } catch (error) {
-        console.error("Error en la ruta /api/payment/create:", error.message);
-        // Devolvemos el mensaje de error que viene del servicio para más claridad
-        res.status(500).json({ message: error.message || 'Error interno al crear el pago.' });
+        res.status(500).json({ message: 'Error al crear la orden de pago.' });
     }
 });
-
 module.exports = router;
