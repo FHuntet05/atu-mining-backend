@@ -10,8 +10,7 @@ const userSchema = new mongoose.Schema({
     usdtForWithdrawal: { type: Number, default: 0 },
     lastClaim: { type: Date, default: Date.now },
     
-    // CORRECCIÓN: El aumento por boosts para un usuario nuevo debe ser 0.
-    boostYieldPerHour: { type: Number, default: 0 },
+    boostYieldPerHour: { type: Number, default: 0 }, // El aumento por boosts empieza en 0
     
     storageCapacity: { type: Number, default: (350 / 24) * 8 },
     referrerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
@@ -23,25 +22,28 @@ const userSchema = new mongoose.Schema({
         firstBoostPurchased: { type: Boolean, default: false },
         invitedUsersCount: { type: Number, default: 0 },
         claimedInviteReward: { type: Boolean, default: false }
-    }
+    },
+    // Añadimos un campo para las ganancias por referidos para que la consulta no falle
+    referralEarnings: { type: Number, default: 0 }
 }, { timestamps: true });
 
-// CORRECCIÓN: Hacemos la creación de usuario explícita para evitar errores de cálculo.
+// Método estático centralizado para encontrar o crear un usuario
 userSchema.statics.findOrCreate = async function(tgUser) {
     if (!tgUser || !tgUser.id) {
         throw new Error("Datos de usuario de Telegram inválidos proporcionados a findOrCreate.");
     }
     let user = await this.findOne({ telegramId: tgUser.id });
     if (!user) {
-        console.log(`Creando nuevo usuario: ${tgUser.id}. Asignando valores iniciales explícitos.`);
+        console.log(`✅ Creando nuevo usuario: ${tgUser.id}. Asignando valores iniciales explícitos.`);
         user = new this({
             telegramId: tgUser.id,
             firstName: tgUser.first_name || tgUser.firstName || 'Usuario',
             username: tgUser.username,
             photoUrl: tgUser.photo_url || tgUser.photoUrl,
+            // Asignación explícita para evitar errores de cálculo y de `default`
             autBalance: 0,
-            boostYieldPerHour: 0, // El aumento inicial es CERO
-            storageCapacity: (350 / 24) * 8, // Capacidad base
+            boostYieldPerHour: 0,
+            storageCapacity: (350 / 24) * 8,
             lastClaim: new Date()
         });
         await user.save();
