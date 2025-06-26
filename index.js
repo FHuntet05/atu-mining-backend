@@ -1,5 +1,4 @@
 // --- Importaciones de Módulos ---
-// Cargamos las variables de entorno desde el archivo .env al inicio de todo.
 require('dotenv').config();
 
 const { Telegraf, Markup } = require('telegraf');
@@ -8,15 +7,14 @@ const express = require('express');
 const cors = require('cors');
 
 // --- Importaciones de Módulos Locales ---
-// Asegúrate de que las rutas a tus archivos locales sean correctas.
-const User = require('./models/User.js');
+const User = require('./models/User.js'); // Importamos el modelo con el nuevo método
 const transactionService = require('./services/transaction.service.js');
-const apiRoutes = require('./routes/index.js'); // Asumiendo que usas el unificador de rutas
+const apiRoutes = require('./routes/index.js');
 
 // --- Configuración de la Aplicación Express ---
 const app = express();
-app.use(cors()); // Habilita CORS para que tu frontend pueda comunicarse con la API.
-app.use(express.json()); // Habilita el parseo de cuerpos de petición en formato JSON.
+app.use(cors());
+app.use(express.json());
 
 // --- Conexión a la Base de Datos MongoDB ---
 mongoose.connect(process.env.DATABASE_URL)
@@ -24,32 +22,46 @@ mongoose.connect(process.env.DATABASE_URL)
   .catch(err => console.error('❌ Error de conexión a MongoDB:', err));
 
 // --- Verificación de Variables de Entorno Críticas ---
-// Es una buena práctica verificar que las variables necesarias existan al iniciar.
 if (!process.env.BOT_TOKEN || !process.env.WEBHOOK_URL) {
     console.error('❌ ERROR CRÍTICO: Las variables de entorno BOT_TOKEN y WEBHOOK_URL son requeridas.');
-    process.exit(1); // Detiene la aplicación si faltan variables críticas.
+    process.exit(1);
 }
 
 // --- Inicialización del Bot de Telegram ---
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
 // --- Lógica del Bot (Comandos, Eventos, etc.) ---
-// Toda tu lógica para /start, /help, etc., se mantiene exactamente igual.
+
+// --- INICIO DE CORRECCIÓN EN EL COMANDO /start ---
 bot.start(async (ctx) => {
   try {
-    const telegramId = ctx.from.id;
-    const firstName = ctx.from.first_name || 'Usuario';
-    const username = ctx.from.username;
-    
-    let user = await User.findOne({ telegramId });
-    if (!user) {
-        // Lógica de creación de usuario...
-        user = new User({ telegramId, firstName, username });
-        await user.save();
+    // 1. Usamos nuestro nuevo y robusto método centralizado.
+    //    `ctx.from` tiene el mismo formato que `initData.user`, por lo que es compatible.
+    const user = await User.findOrCreate(ctx.from);
+
+    // 2. Lógica de Referidos
+    //    Procesamos el referido solo si el usuario es realmente nuevo.
+    //    El `findOrCreate` NO nos dice si el usuario es nuevo, así que ajustamos la lógica.
+    const startPayload = ctx.startPayload;
+    if (startPayload && !user.referrerId && user.telegramId.toString() !== startPayload) {
+        const referrer = await User.findOne({ telegramId: startPayload });
+        if (referrer) {
+            // Verificamos que el referido no esté ya en la lista para evitar duplicados
+            if (!referrer.referrals.includes(user._id)) {
+                user.referrerId = referrer._id;
+                await user.save();
+                
+                referrer.referrals.push(user._id);
+                // Aquí iría tu lógica para la misión de invitar a 10 amigos, si es necesario.
+                await referrer.save();
+            }
+        }
     }
     
-    const welcomeMessage = `¡Bienvenido a ATU Mining, ${firstName}! 🚀\n\n` +
-      `Haz clic en el botón de abajo para empezar a minar.`;
+    // 3. Enviamos el mensaje de bienvenida
+    const welcomeMessage = `¡Bienvenido a ATU Mining, ${user.firstName}! 🚀\n\n` +
+      `Estás a punto de entrar a nuestro ecosistema de minería gamificada.\n\n` +
+      `¡Haz clic en el botón de abajo para empezar a minar ahora! 👇`;
 
     await ctx.reply(welcomeMessage, {
       reply_markup: {
@@ -58,47 +70,36 @@ bot.start(async (ctx) => {
         ]
       }
     });
+
   } catch (error) {
     console.error('Error en el comando /start:', error);
+    await ctx.reply('Ocurrió un error al procesar tu inicio. Por favor, intenta de nuevo más tarde.');
   }
 });
+// --- FIN DE CORRECCIÓN EN EL COMANDO /start ---
 
-// ... aquí irían otros manejadores de bot como bot.on('new_chat_members'), etc.
 
 // --- Configuración de Rutas de la API ---
-// Todas las rutas definidas en tu carpeta 'routes' estarán disponibles bajo el prefijo /api
 app.use('/api', apiRoutes);
 
 
-// --- LÓGICA DE WEBHOOK (La nueva implementación) ---
-
-// 1. Creamos una ruta secreta y única para nuestro webhook.
-//    Esto evita que cualquiera pueda enviar actualizaciones falsas a nuestro bot.
+// --- Lógica de Webhook ---
 const secretPath = `/telegraf/${bot.secretPathComponent()}`;
-
-// 2. Le decimos a nuestra aplicación Express que use el middleware de Telegraf.
-//    Cualquier petición POST que llegue a nuestra ruta secreta será procesada por Telegraf.
 app.use(bot.webhookCallback(secretPath));
 
 
 // --- Lanzamiento del Servidor ---
-const PORT = process.env.PORT || 10000; // Render usa el puerto 10000 por defecto.
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, async () => {
   console.log(`✅ Servidor Express escuchando en el puerto ${PORT}`);
   
-  // 3. Una vez que nuestro servidor está en línea, configuramos el webhook en la API de Telegram.
-  //    Le decimos a Telegram: "A partir de ahora, envía todas las actualizaciones a esta URL".
   try {
     const webhookUrl = `${process.env.WEBHOOK_URL}${secretPath}`;
     await bot.telegram.setWebhook(webhookUrl);
     console.log(`✅ Webhook configurado exitosamente en Telegram.`);
-    console.log(`   -> URL: ${webhookUrl}`);
   } catch (error) {
     console.error('❌ Error fatal al configurar el webhook:', error);
   }
 
-  // El vigilante de transacciones de BscScan se inicia como siempre.
   transactionService.startCheckingTransactions(bot);
 });
-
-// Nota: Ya no existe la línea `bot.launch()`, que era la que causaba el conflicto 409.
