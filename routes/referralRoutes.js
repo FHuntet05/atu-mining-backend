@@ -5,25 +5,41 @@ const User = require('../models/User');
 const COMMISSIONS = { level1: 0.27, level2: 0.17, level3: 0.07 };
 
 router.get('/:telegramId', async (req, res) => {
+    // --- INICIO DE DEPURACIÓN ---
+    console.log("=============================================");
+    console.log("INICIANDO PETICIÓN A /api/referrals/:telegramId");
+    
     try {
         const { telegramId } = req.params;
+        console.log(`[PASO 1] Telegram ID recibido de la URL: ${telegramId} (Tipo: ${typeof telegramId})`);
+
+        if (!telegramId || telegramId === 'undefined' || telegramId === 'null') {
+            console.error("❌ ERROR: El telegramId recibido es inválido o nulo.");
+            return res.status(400).json({ message: 'El ID de Telegram proporcionado es inválido.' });
+        }
         
-        // Paso 1: Encontrar al usuario principal
-        const user = await User.findOne({ telegramId: parseInt(telegramId, 10) }).select('telegramId referralEarnings referrals');
-        if (!user) return res.status(404).json({ message: 'Usuario no encontrado.' });
+        const numericTelegramId = parseInt(telegramId, 10);
+        if (isNaN(numericTelegramId)) {
+            console.error(`❌ ERROR: No se pudo convertir '${telegramId}' a un número.`);
+            return res.status(400).json({ message: 'El ID de Telegram debe ser un número.' });
+        }
+        console.log(`[PASO 2] Buscando usuario en la base de datos con ID numérico: ${numericTelegramId}`);
 
-        // Paso 2: Obtener referidos de Nivel 1
-        const level1Users = await User.find({ '_id': { $in: user.referrals } }).select('referrals');
-        
-        // Paso 3: Obtener referidos de Nivel 2
-        const level1Ids = level1Users.map(u => u._id);
-        const level2Users = await User.find({ 'referrerId': { $in: level1Ids } }).select('referrals');
+        const user = await User.findOne({ telegramId: numericTelegramId });
 
-        // Paso 4: Obtener referidos de Nivel 3
-        const level2Ids = level2Users.map(u => u._id);
-        const level3Users = await User.find({ 'referrerId': { $in: level2Ids } });
+        if (!user) {
+            console.warn(`⚠️ ADVERTENCIA: No se encontró ningún usuario con el ID ${numericTelegramId}.`);
+            return res.status(404).json({ message: 'Usuario no encontrado.' });
+        }
+        console.log(`[PASO 3] Usuario encontrado: ${user.firstName} (${user._id})`);
 
-        // Esta es la forma más rápida y segura de contar, evitando timeouts.
+        // La consulta optimizada
+        const level1Users = await User.find({ '_id': { $in: user.referrals } }).select('_id');
+        const level2Users = await User.find({ 'referrerId': { $in: level1Users.map(u => u._id) } }).select('_id');
+        const level3Users = await User.find({ 'referrerId': { $in: level2Users.map(u => u._id) } }).select('_id');
+
+        console.log(`[PASO 4] Conteo de referidos: N1=${level1Users.length}, N2=${level2Users.length}, N3=${level3Users.length}`);
+
         const referralData = {
             code: user.telegramId,
             totalEarnings: user.referralEarnings || 0,
@@ -33,10 +49,15 @@ router.get('/:telegramId', async (req, res) => {
               { level: 3, title: 'Nivel 3', invites: level3Users.length, earnings: '0.00', color: '#d84ef7', gainPerReferral: `${COMMISSIONS.level3} USDT` },
             ]
         };
+
+        console.log("[PASO 5] Enviando respuesta exitosa al frontend.");
+        console.log("=============================================");
         res.status(200).json(referralData);
+
     } catch (error) {
-        console.error("Error en /api/referrals:", error);
-        res.status(500).json({ message: 'Error del servidor.' });
+        console.error("💥 ERROR CATASTRÓFICO en /api/referrals:", error);
+        console.log("=============================================");
+        res.status(500).json({ message: 'Error interno del servidor.' });
     }
 });
 
