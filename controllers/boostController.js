@@ -1,14 +1,9 @@
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
-// Asumo que tienes un archivo de configuración para tus boosts
-const BOOSTS_CONFIG = require('../config/boosts'); 
+const BOOSTS_CONFIG = require('../config/tasks'); // Asumiendo que tus boosts están en un archivo de config
 
-/**
- * Permite a un usuario comprar un boost usando su saldo de depósito interno (usdtBalance).
- */
 exports.purchaseWithBalance = async (req, res) => {
-    // Usamos una sesión para asegurar que todas las operaciones sean atómicas
     const session = await mongoose.startSession();
     session.startTransaction();
 
@@ -20,7 +15,7 @@ exports.purchaseWithBalance = async (req, res) => {
             return res.status(400).json({ message: "Datos de la compra inválidos." });
         }
 
-         const user = await User.findOne({ telegramId }).session(session);
+        const user = await User.findOne({ telegramId }).session(session);
         const boostToBuy = BOOSTS_CONFIG.find(b => b.id === boostId);
 
         if (!user) {
@@ -34,55 +29,54 @@ exports.purchaseWithBalance = async (req, res) => {
         
         const totalCost = boostToBuy.price * purchaseQuantity;
 
-        // Validación crítica: ¿Tiene el usuario suficiente saldo en usdtBalance?
         if (user.usdtBalance < totalCost) {
             await session.abortTransaction();
-            return res.status(400).json({ message: "Tu saldo de depósito es insuficiente." });
+            return res.status(400).json({ message: "Saldo de depósito insuficiente." });
         }
 
-       // --- Aplicamos los cambios al usuario ---
-        user.usdtBalance -= (boostToBuy.price * quantity);
-        user.boostYieldPerHour += (boostToBuy.dailyYield / 24) * quantity;
-       
+        // --- Aplicamos los cambios al usuario ---
+        user.usdtBalance -= totalCost;
+        const yieldIncreasePerHour = (boostToBuy.dailyYield / 24) * purchaseQuantity;
+        user.boostYieldPerHour += yieldIncreasePerHour;
+        
         // --- INICIO DE CORRECCIÓN ---
-        // Marcamos la misión como completada si es la primera compra
-        if (!user.hasMadeDeposit) { // Usamos hasMadeDeposit como proxy de primera compra
-            user.hasMadeDeposit = true;
+        // Si el objeto 'missions' no existe en este documento de usuario, lo inicializamos.
+        if (!user.missions) {
+            user.missions = {};
         }
+        // Ahora es seguro asignar la propiedad.
         user.missions.firstBoostPurchased = true;
         // --- FIN DE CORRECCIÓN ---
-        
-        // 3. Registramos la transacción de compra
+
+        // También marcamos hasMadeDeposit, ya que una compra con saldo implica un depósito previo.
+        if (!user.hasMadeDeposit) {
+            user.hasMadeDeposit = true;
+        }
+
         await Transaction.create([{
             userId: user._id, type: 'purchase', currency: 'USDT',
-            amount: -(boostToBuy.price * quantity), status: 'completed',
-            details: `Compra de ${quantity}x ${boostToBuy.title} con saldo`
+            amount: -totalCost, status: 'completed',
+            details: `Compra de ${purchaseQuantity}x ${boostToBuy.title} con saldo`
         }], { session });
 
-
-        // Guardamos los cambios en el documento del usuario
         const updatedUser = await user.save({ session });
-        
-        // Si todo sale bien, confirmamos la transacción en la base de datos
         await session.commitTransaction();
 
         res.status(200).json({
-            message: `¡Compra con saldo exitosa! Tu producción ha aumentado.`,
+            message: `¡Compra exitosa! Tu producción ha aumentado.`,
             user: updatedUser
         });
 
     } catch (error) {
         await session.abortTransaction();
         console.error("Error en purchaseWithBalance:", error);
-        res.status(500).json({ message: "Error interno al procesar la compra." });
+        res.status(500).json({ message: "Error al procesar la compra." });
     } finally {
         session.endSession();
     }
 };
 
-/**
- * Devuelve la lista de boosts desde el archivo de configuración.
- */
+// getBoosts no necesita cambios.
 exports.getBoosts = async (req, res) => {
     try {
         res.status(200).json(BOOSTS_CONFIG);
