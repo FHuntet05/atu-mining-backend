@@ -33,7 +33,6 @@ const userSchema = new mongoose.Schema({
         default: false 
     }
     // --- FIN DE NUEVOS CAMPOS ---
-
 }, { timestamps: true });
 
 userSchema.statics.findOrCreate = async function(tgUser) {
