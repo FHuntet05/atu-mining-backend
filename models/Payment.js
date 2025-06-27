@@ -1,53 +1,46 @@
 const mongoose = require('mongoose');
 
 const paymentSchema = new mongoose.Schema({
-    // El 'userId' es la única referencia que necesitamos al usuario.
+    // Referencia al usuario que inició el pago
     userId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         required: true,
+        index: true,
     },
+    // Monto base que el usuario quería depositar (ej: 3.00)
     baseAmount: {
         type: Number,
         required: true,
     },
+    // Monto único y específico que el usuario debe enviar (ej: 3.001234)
     uniqueAmount: {
         type: Number,
         required: true,
-        unique: true, // Asegura que cada monto único sea, de hecho, único
+        unique: true, // Asegura que no se generen dos órdenes con el mismo monto exacto
     },
+    // Estado actual de la orden de pago
     status: {
         type: String,
-        enum: ['pending', 'completed', 'failed', 'expired'],
+        enum: ['pending', 'completed', 'failed', 'expired', 'manual_review'],
         default: 'pending',
+        index: true,
     },
-    txHash: { // Guardamos el hash de la transacción de BscScan para referencia
+    // Hash de la transacción de la blockchain una vez confirmada
+    txHash: {
         type: String,
         default: null,
     },
-    expiresAt: { // Para poder limpiar órdenes antiguas
+    // Fecha y hora en la que la orden de pago expira
+    expiresAt: {
         type: Date,
         required: true,
     },
-    
-    // --- INICIO DE CORRECCIÓN ---
-    // Eliminamos los siguientes campos que estaban marcados como 'required'
-    // pero que no estábamos proporcionando, causando el error de validación.
-    /*
-    boostId: {
-        type: String, // O ObjectId si refieres a un modelo de Boost
-        required: true, 
-    },
-    telegramId: {
-        type: Number,
-        required: true,
-    }
-    */
-    // --- FIN DE CORRECCIÓN ---
-
 }, { timestamps: true });
 
-// Opcional: Crear un índice para que las órdenes que expiran se puedan limpiar eficientemente
+// Índice TTL (Time-To-Live): MongoDB limpiará automáticamente los documentos expirados.
+// Opcional, pero muy recomendado para mantener la colección limpia.
+// Lo configuramos para que se borren 1 segundo después de la fecha de expiración.
 paymentSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 const Payment = mongoose.model('Payment', paymentSchema);
