@@ -9,7 +9,7 @@ const userSchema = new mongoose.Schema({
     usdtBalance: { type: Number, default: 0 },
     usdtForWithdrawal: { type: Number, default: 0 },
     lastClaim: { type: Date, default: Date.now },
-    boostYieldPerHour: { type: Number, default: 0 },
+     activeBoosts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'ActiveBoost' }]
     storageCapacity: { type: Number, default: (350 / 24) * 8 },
     referrerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     referrals: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],

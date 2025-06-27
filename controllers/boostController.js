@@ -39,19 +39,27 @@ exports.purchaseWithBalance = async (req, res) => {
         const yieldIncreasePerHour = (boostToBuy.dailyYield / 24) * purchaseQuantity;
         user.boostYieldPerHour += yieldIncreasePerHour;
         
-        // --- INICIO DE CORRECCIÓN ---
-        // Si el objeto 'missions' no existe en este documento de usuario, lo inicializamos.
-        if (!user.missions) {
-            user.missions = {};
-        }
-        // Ahora es seguro asignar la propiedad.
-        user.missions.firstBoostPurchased = true;
-        // --- FIN DE CORRECCIÓN ---
+       // --- LÓGICA DE COMPRA REDISEÑADA ---
+        user.usdtBalance -= totalCost;
+        
+        // Creamos N documentos de ActiveBoost, uno por cada unidad comprada
+        const boostsToCreate = [];
+        const expirationDate = new Date(Date.now() + boostToBuy.duration * 24 * 60 * 60 * 1000);
+        const yieldIncrease = boostToBuy.dailyYield / 24;
 
-        // También marcamos hasMadeDeposit, ya que una compra con saldo implica un depósito previo.
-        if (!user.hasMadeDeposit) {
-            user.hasMadeDeposit = true;
+        for (let i = 0; i < quantity; i++) {
+            boostsToCreate.push({
+                userId: user._id,
+                boostId: boostToBuy.id,
+                yieldIncreasePerHour: yieldIncrease,
+                expiresAt: expirationDate,
+            });
         }
+        
+        const createdBoosts = await ActiveBoost.insertMany(boostsToCreate, { session });
+        
+        // Añadimos las referencias de los nuevos boosts al usuario
+        user.activeBoosts.push(...createdBoosts.map(b => b._id));
 
         await Transaction.create([{
             userId: user._id, type: 'purchase', currency: 'USDT',
@@ -59,13 +67,8 @@ exports.purchaseWithBalance = async (req, res) => {
             details: `Compra de ${purchaseQuantity}x ${boostToBuy.title} con saldo`
         }], { session });
 
-        const updatedUser = await user.save({ session });
-        await session.commitTransaction();
-
-        res.status(200).json({
-            message: `¡Compra exitosa! Tu producción ha aumentado.`,
-            user: updatedUser
-        });
+       const updatedUser = await User.findById(user._id).populate('activeBoosts');
+        res.status(200).json({ message: '¡Compra exitosa!', user: updatedUser });
 
     } catch (error) {
         await session.abortTransaction();
