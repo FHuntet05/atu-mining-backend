@@ -1,8 +1,12 @@
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
-const BOOSTS_CONFIG = require('../config/boosts'); // Asumiendo que tus boosts están en un archivo de config
+// Asumo que tienes un archivo de configuración para tus boosts
+const BOOSTS_CONFIG = require('../config/boosts'); 
 
+/**
+ * Permite a un usuario comprar un boost usando su saldo de depósito interno (usdtBalance).
+ */
 exports.purchaseWithBalance = async (req, res) => {
     // Usamos una sesión para asegurar que todas las operaciones sean atómicas
     const session = await mongoose.startSession();
@@ -10,9 +14,9 @@ exports.purchaseWithBalance = async (req, res) => {
 
     try {
         const { telegramId, boostId, quantity } = req.body;
-        const amount = parseInt(quantity, 10) || 1;
+        const purchaseQuantity = parseInt(quantity, 10) || 1;
 
-        if (!telegramId || !boostId || amount <= 0) {
+        if (!telegramId || !boostId || purchaseQuantity <= 0) {
             return res.status(400).json({ message: "Datos de la compra inválidos." });
         }
 
@@ -25,57 +29,59 @@ exports.purchaseWithBalance = async (req, res) => {
         }
         if (!boostToBuy) {
             await session.abortTransaction();
-            return res.status(404).json({ message: "Boost no encontrado." });
+            return res.status(404).json({ message: "El Boost seleccionado no existe." });
         }
         
-        const totalCost = boostToBuy.price * amount;
+        const totalCost = boostToBuy.price * purchaseQuantity;
 
-        // Validación crítica: ¿Tiene el usuario suficiente saldo?
+        // Validación crítica: ¿Tiene el usuario suficiente saldo en usdtBalance?
         if (user.usdtBalance < totalCost) {
             await session.abortTransaction();
-            return res.status(400).json({ message: "Saldo de depósito insuficiente." });
+            return res.status(400).json({ message: "Tu saldo de depósito es insuficiente." });
         }
 
-        // --- Aplicamos los cambios ---
-        // 1. Restamos el coste del saldo del usuario
+        // --- Aplicamos los cambios al usuario ---
+        // 1. Restamos el coste del saldo de depósito del usuario
         user.usdtBalance -= totalCost;
 
-        // 2. Calculamos y añadimos el aumento de producción
-        const yieldIncreasePerHour = (boostToBuy.dailyYield / 24) * amount;
-        user.boostYieldPerHour = (user.boostYieldPerHour || 0) + yieldIncreasePerHour;
+        // 2. Calculamos y añadimos el aumento de producción por hora
+        const yieldIncreasePerHour = (boostToBuy.dailyYield / 24) * purchaseQuantity;
+        user.boostYieldPerHour += yieldIncreasePerHour;
         
         // 3. Registramos la transacción de compra
         await Transaction.create([{
             userId: user._id,
             type: 'purchase',
             currency: 'USDT',
-            amount: -totalCost, // Negativo porque es un gasto
+            amount: -totalCost, // Negativo porque es un gasto del saldo
             status: 'completed',
-            details: `Compra de ${amount}x ${boostToBuy.title}`
+            details: `Compra de ${purchaseQuantity}x ${boostToBuy.title} con saldo interno`
         }], { session });
 
-        // Guardamos los cambios en el usuario
+        // Guardamos los cambios en el documento del usuario
         const updatedUser = await user.save({ session });
         
-        // Si todo sale bien, confirmamos la transacción
+        // Si todo sale bien, confirmamos la transacción en la base de datos
         await session.commitTransaction();
 
         res.status(200).json({
-            message: `¡Compra exitosa! Tu producción ha aumentado.`,
+            message: `¡Compra con saldo exitosa! Tu producción ha aumentado.`,
             user: updatedUser
         });
 
     } catch (error) {
         await session.abortTransaction();
         console.error("Error en purchaseWithBalance:", error);
-        res.status(500).json({ message: "Error interno del servidor al procesar la compra." });
+        res.status(500).json({ message: "Error interno al procesar la compra." });
     } finally {
         session.endSession();
     }
 };
 
+/**
+ * Devuelve la lista de boosts desde el archivo de configuración.
+ */
 exports.getBoosts = async (req, res) => {
-    // Esta función simplemente devuelve la lista de boosts desde la configuración
     try {
         res.status(200).json(BOOSTS_CONFIG);
     } catch (error) {
