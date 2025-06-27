@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
+    // ... (tus campos existentes: telegramId, firstName, etc.)
     telegramId: { type: Number, required: true, unique: true, index: true },
     firstName: { type: String, required: true },
     username: { type: String, required: false },
@@ -9,7 +10,7 @@ const userSchema = new mongoose.Schema({
     usdtBalance: { type: Number, default: 0 },
     usdtForWithdrawal: { type: Number, default: 0 },
     lastClaim: { type: Date, default: Date.now },
-    boostYieldPerHour: { type: Number, default: 0 }, // El valor por defecto es CERO
+    boostYieldPerHour: { type: Number, default: 0 },
     storageCapacity: { type: Number, default: (350 / 24) * 8 },
     referrerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     referrals: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
@@ -21,7 +22,18 @@ const userSchema = new mongoose.Schema({
         invitedUsersCount: { type: Number, default: 0 },
         claimedInviteReward: { type: Boolean, default: false }
     },
-    referralEarnings: { type: Number, default: 0 }
+    
+    // --- INICIO DE NUEVOS CAMPOS ---
+    referralEarnings: { // Total de USDT ganados por comisiones
+        type: Number, 
+        default: 0 
+    },
+    hasMadeDeposit: { // Se vuelve 'true' después del primer depósito exitoso
+        type: Boolean, 
+        default: false 
+    }
+    // --- FIN DE NUEVOS CAMPOS ---
+
 }, { timestamps: true });
 
 userSchema.statics.findOrCreate = async function(tgUser) {
