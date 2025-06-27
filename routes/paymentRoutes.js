@@ -6,57 +6,41 @@ const DEPOSIT_WALLET_ADDRESS = process.env.DEPOSIT_WALLET_ADDRESS;
 
 router.post('/create', async (req, res) => {
     try {
-        const { telegramId, amount } = req.body;
+        const { telegramId, amount, senderAddress } = req.body; // <-- Recibimos la nueva dirección
         const baseAmount = parseFloat(amount);
 
-        if (!telegramId || isNaN(baseAmount) || baseAmount <= 0) {
-            return res.status(400).json({ message: 'Datos inválidos para crear la orden.' });
+        if (!telegramId || isNaN(baseAmount) || baseAmount <= 0 || !senderAddress) {
+            return res.status(400).json({ message: 'Datos inválidos. Se requiere ID, monto y dirección de origen.' });
         }
-
+        if (!/^0x[a-fA-F0-9]{40}$/.test(senderAddress)) {
+             return res.status(400).json({ message: 'La dirección de billetera de origen no es válida.' });
+        }
+        
         const user = await User.findOne({ telegramId });
         if (!user) return res.status(404).json({ message: 'Usuario no encontrado.' });
-        
-        const existingPayment = await Payment.findOne({ 
-            userId: user._id, 
-            status: 'pending',
-            expiresAt: { $gt: new Date() } 
-        });
+
+        const existingPayment = await Payment.findOne({ userId: user._id, status: 'pending', expiresAt: { $gt: new Date() } });
         if (existingPayment) {
             return res.status(409).json({ message: 'Ya tienes una orden de pago pendiente.' });
         }
 
-        // --- INICIO DE CORRECCIÓN ANTI-COLISIONES ---
-        // Combinamos un número aleatorio con los milisegundos actuales para una unicidad casi perfecta.
-        const randomMicroAmount = (Date.now() % 10000) / 10000000 + Math.random() * 0.0001;
-        const uniqueAmount = parseFloat((baseAmount + randomMicroAmount).toFixed(6));
-        // --- FIN DE CORRECCIÓN ANTI-COLISIONES ---
-
         const newPayment = new Payment({
             userId: user._id,
-            baseAmount: baseAmount,
-            uniqueAmount: uniqueAmount,
-            status: 'pending',
-            expiresAt: new Date(Date.now() + 10 * 60 * 1000)
+            baseAmount,
+            senderAddress: senderAddress.toLowerCase(), // Guardamos en minúsculas para una comparación segura
+            expiresAt: new Date(Date.now() + 15 * 60 * 1000) // 15 minutos para completar
         });
         await newPayment.save();
         
-        console.log(`[PAGOS] Nueva orden creada para ${telegramId}. Monto a pagar: ${uniqueAmount}`);
-        
         res.status(201).json({
-            uniqueAmount: newPayment.uniqueAmount,
+            // Ya no enviamos uniqueAmount, solo el monto base y la dirección de destino.
+            amountToPay: newPayment.baseAmount,
             depositAddress: DEPOSIT_WALLET_ADDRESS,
         });
 
     } catch (error) {
-        // --- MANEJO DE ERROR MEJORADO ---
-        if (error.code === 11000) { // Si el error es de clave duplicada
-            console.warn("[PAGOS] Colisión de 'uniqueAmount' detectada. Se reintentará la operación.");
-            // Damos una respuesta amigable y le pedimos al usuario que reintente
-            return res.status(409).json({ message: 'Hubo una colisión al generar la orden. Por favor, intenta de nuevo.' });
-        }
         console.error("Error al crear orden de pago:", error);
         res.status(500).json({ message: 'Error interno al procesar la orden.' });
     }
 });
-
 module.exports = router;
