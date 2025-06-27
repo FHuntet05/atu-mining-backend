@@ -7,7 +7,7 @@ const express = require('express');
 const cors = require('cors');
 
 // --- Importaciones de Módulos Locales ---
-const User = require('./models/User.js'); // Importamos el modelo con el nuevo método
+const User = require('./models/User.js');
 const transactionService = require('./services/transaction.service.js');
 const apiRoutes = require('./routes/index.js');
 
@@ -32,67 +32,68 @@ const bot = new Telegraf(process.env.BOT_TOKEN);
 
 // --- Lógica del Bot (Comandos, Eventos, etc.) ---
 
-// --- INICIO DE CORRECCIÓN EN EL COMANDO /start ---
+// --- INICIO DE LA MODIFICACIÓN: Nuevo Mensaje de Bienvenida ---
 bot.start(async (ctx) => {
   try {
-    // 1. Usamos nuestro nuevo y robusto método centralizado.
-    //    `ctx.from` tiene el mismo formato que `initData.user`, por lo que es compatible.
+    // Usamos el método centralizado para encontrar o crear al usuario.
     const user = await User.findOrCreate(ctx.from);
+    
+    // Usamos el `firstName` del usuario para el mensaje, ya que el `username` puede no existir.
+    const username = user.firstName || 'MINERO'; 
 
-    // 2. Lógica de Referidos
-    //    Procesamos el referido solo si el usuario es realmente nuevo.
-    //    El `findOrCreate` NO nos dice si el usuario es nuevo, así que ajustamos la lógica.
+    // Lógica de Referidos (si aplica)
     const startPayload = ctx.startPayload;
     if (startPayload && !user.referrerId && user.telegramId.toString() !== startPayload) {
         const referrer = await User.findOne({ telegramId: startPayload });
         if (referrer) {
-            // Verificamos que el referido no esté ya en la lista para evitar duplicados
             if (!referrer.referrals.includes(user._id)) {
                 user.referrerId = referrer._id;
                 await user.save();
-                
                 referrer.referrals.push(user._id);
-                // Aquí iría tu lógica para la misión de invitar a 10 amigos, si es necesario.
                 await referrer.save();
             }
         }
     }
     
-    // 3. Enviamos el mensaje de bienvenida
-    const welcomeMessage = `¡Bienvenido a ATU Mining, ${user.firstName}! 🚀\n\n` +
-      `Estás a punto de entrar a nuestro ecosistema de minería gamificada.\n\n` +
-      `¡Haz clic en el botón de abajo para empezar a minar ahora! 👇`;
+    // Aquí está tu nuevo mensaje de bienvenida, formateado y listo.
+    const welcomeMessage = `⚡️ ¡BIENVENIDO/A, ${username.toUpperCase()}! ⚒️\n\n` +
+        `🔹 PENIXBOT · ${Math.floor(Math.random() * 20000) + 10000} mineros activos/mes\n\n` +
+        `🚀 ¡Prepárate para una aventura de minería legendaria!\n\n` +
+        `✅ Completa desafíos diarios y gana recompensas en AUT Coins 💰.\n` +
+        `⛏️ Mejora tu equipo de minería para aumentar tus ganancias.\n` +
+        `🌐 Forma alianzas con otros mineros y domina el ranking.\n\n` +
+        `👇 ¡Haz clic en Minar Ahora! para iniciar!\n` +
+        `🕒 Únete antes de que se agoten las bonificaciones.\n\n` +
+        `⚙️ Sistema de cifrado RIX activado...`;
 
+    // Enviamos el mensaje de bienvenida junto con el botón para abrir la Mini App.
     await ctx.reply(welcomeMessage, {
       reply_markup: {
         inline_keyboard: [
-          [{ text: "💎 Abrir Minero", web_app: { url: process.env.MINI_APP_URL } }]
+          [{ text: "💎 Minar Ahora!", web_app: { url: process.env.MINI_APP_URL } }]
         ]
       }
     });
 
   } catch (error) {
     console.error('Error en el comando /start:', error);
-    await ctx.reply('Ocurrió un error al procesar tu inicio. Por favor, intenta de nuevo más tarde.');
+    await ctx.reply('Ocurrió un error al iniciar. Por favor, intenta de nuevo más tarde.');
   }
 });
-// --- FIN DE CORRECCIÓN EN EL COMANDO /start ---
+// --- FIN DE LA MODIFICACIÓN ---
 
 
 // --- Configuración de Rutas de la API ---
 app.use('/api', apiRoutes);
 
-
 // --- Lógica de Webhook ---
 const secretPath = `/telegraf/${bot.secretPathComponent()}`;
 app.use(bot.webhookCallback(secretPath));
-
 
 // --- Lanzamiento del Servidor ---
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, async () => {
   console.log(`✅ Servidor Express escuchando en el puerto ${PORT}`);
-  
   try {
     const webhookUrl = `${process.env.WEBHOOK_URL}${secretPath}`;
     await bot.telegram.setWebhook(webhookUrl);
@@ -100,6 +101,5 @@ app.listen(PORT, async () => {
   } catch (error) {
     console.error('❌ Error fatal al configurar el webhook:', error);
   }
-
   transactionService.startCheckingTransactions(bot);
 });
