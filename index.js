@@ -29,7 +29,7 @@ if (!process.env.BOT_TOKEN || !process.env.WEBHOOK_URL) {
 
 // --- Inicialización del Bot de Telegram ---
 const bot = new Telegraf(process.env.BOT_TOKEN);
-
+app.locals.bot = bot;
 // --- Lógica del Bot (Comandos, Eventos, etc.) ---
 
 // --- INICIO DE LA MODIFICACIÓN: Nuevo Mensaje de Bienvenida ---
@@ -57,14 +57,12 @@ bot.start(async (ctx) => {
     
     // Aquí está tu nuevo mensaje de bienvenida, formateado y listo.
     const welcomeMessage = `⚡️ ¡BIENVENIDO/A, ${username.toUpperCase()}! ⚒️\n\n` +
-        `🔹 PENIXBOT · ${Math.floor(Math.random() * 20000) + 10000} mineros activos/mes\n\n` +
         `🚀 ¡Prepárate para una aventura de minería legendaria!\n\n` +
         `✅ Completa desafíos diarios y gana recompensas en AUT Coins 💰.\n` +
         `⛏️ Mejora tu equipo de minería para aumentar tus ganancias.\n` +
         `🌐 Forma alianzas con otros mineros y domina el ranking.\n\n` +
         `👇 ¡Haz clic en Minar Ahora! para iniciar!\n` +
-        `🕒 Únete antes de que se agoten las bonificaciones.\n\n` +
-        `⚙️ Sistema de cifrado RIX activado...`;
+        `🕒 Únete antes de que se agoten las bonificaciones.` ;
 
     // Enviamos el mensaje de bienvenida junto con el botón para abrir la Mini App.
     await ctx.reply(welcomeMessage, {

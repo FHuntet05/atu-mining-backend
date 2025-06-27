@@ -1,38 +1,23 @@
 const mongoose = require('mongoose');
 
 const transactionSchema = new mongoose.Schema({
-    userId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: true,
-    },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     type: {
         type: String,
-        enum: ['deposit', 'purchase', 'claim', 'exchange', 'withdrawal_request', 'withdrawal_approved', 'withdrawal_rejected'],
+        enum: ['deposit', 'purchase', 'claim_mining', 'claim_task', 'exchange', 'withdrawal_request', 'withdrawal_approved', 'withdrawal_rejected'],
         required: true,
     },
-    currency: {
-        type: String,
-        enum: ['USDT', 'AUT'],
-        required: true,
-    },
-    amount: {
-        type: Number,
-        required: true,
-    },
+    currency: { type: String, enum: ['USDT', 'AUT'], required: true },
+    // El amount ahora será siempre un número.
+    amount: { type: Number, required: true },
     status: {
         type: String,
         enum: ['pending', 'completed', 'failed'],
         required: true,
     },
-    details: {
-        type: String,
-    },
-    txHash: { // Para depósitos o retiros procesados
-        type: String,
-    }
+    // Details es más flexible que description.
+    details: { type: String }, 
 }, { timestamps: true });
 
 const Transaction = mongoose.model('Transaction', transactionSchema);
-
 module.exports = Transaction;

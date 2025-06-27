@@ -1,37 +1,41 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
-const TASKS = require('../config/tasks'); // Asumiendo que las tareas están en /config/tasks.js
+const Transaction = require('../models/Transaction');
+const TASKS = require('../config/tasks');
 
 const GROUP_CHAT_ID = process.env.GROUP_CHAT_ID;
 
-// Ruta GET para obtener el estado de las tareas
+// Pasa la instancia del bot a la ruta
+router.use((req, res, next) => {
+    req.bot = req.app.locals.bot;
+    next();
+});
+
 router.get('/:telegramId', async (req, res) => {
     try {
         const { telegramId } = req.params;
-        const bot = req.app.locals.bot;
         const user = await User.findOne({ telegramId });
         if (!user) return res.status(404).json({ message: 'Usuario no encontrado.' });
 
-        const completed = user.completedTasks || [];
         const userTasks = await Promise.all(TASKS.map(async (task) => {
-            let isCompleted = completed.includes(task.id);
+            let isCompleted = (user.completedTasks || []).includes(task.id);
             if (task.type === 'join_group' && !isCompleted && GROUP_CHAT_ID) {
                 try {
-                    const member = await bot.telegram.getChatMember(GROUP_CHAT_ID, telegramId);
+                    // Ahora req.bot está disponible
+                    const member = await req.bot.telegram.getChatMember(GROUP_CHAT_ID, telegramId);
                     isCompleted = ['member', 'administrator', 'creator'].includes(member.status);
-                } catch (e) { /* Ignorar errores si no se puede verificar */ }
+                } catch (e) { /* Falla silenciosamente si el usuario no está */ }
             }
-            return { ...task, isCompleted, claimed: completed.includes(task.id) };
+            return { ...task, isCompleted, claimed: (user.completedTasks || []).includes(task.id) };
         }));
         res.status(200).json(userTasks);
     } catch (error) {
         console.error("Error en GET /api/tasks:", error);
-        res.status(500).json({ message: 'Error del servidor al obtener tareas.' });
+        res.status(500).json({ message: 'Error al obtener tareas.' });
     }
 });
 
-// Ruta POST para reclamar la recompensa de una tarea
 router.post('/claim', async (req, res) => {
     try {
         const { telegramId, taskId } = req.body;
@@ -41,19 +45,23 @@ router.post('/claim', async (req, res) => {
         if (!user || !task) return res.status(404).json({ message: 'Usuario o tarea no encontrada.' });
         if ((user.completedTasks || []).includes(taskId)) return res.status(400).json({ message: 'Ya has reclamado esta tarea.' });
 
-        // En un sistema de producción, aquí verificaríamos de nuevo que la tarea está completa
-        // Pero por ahora, confiamos en que el frontend solo habilita el botón cuando debe.
-        
-        user.autBalance = (user.autBalance || 0) + task.reward;
-        if (!user.completedTasks) user.completedTasks = [];
+        user.autBalance += task.reward;
         user.completedTasks.push(taskId);
-        
-        const updatedUser = await user.save();
-        res.status(200).json({ message: `¡Recompensa de ${task.reward} AUT reclamada!`, user: updatedUser });
 
+        await Transaction.create({
+            userId: user._id,
+            type: 'claim_task',
+            currency: 'AUT',
+            amount: task.reward, // Es un número
+            status: 'completed',
+            details: `Recompensa por tarea: ${task.title}`
+        });
+
+        const updatedUser = await user.save();
+        res.status(200).json({ message: `¡Recompensa reclamada!`, user: updatedUser });
     } catch (error) {
         console.error("Error en POST /api/tasks/claim:", error);
-        res.status(500).json({ message: 'Error del servidor al reclamar la tarea.' });
+        res.status(500).json({ message: 'Error al reclamar la tarea.' });
     }
 });
 

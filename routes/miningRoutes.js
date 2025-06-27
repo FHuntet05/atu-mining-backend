@@ -1,43 +1,53 @@
-// En: atu-mining-backend/routes/miningRoutes.js
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 
 const ENERGY_CAPACITY_HOURS = 8;
-const CYCLE_DURATION_MS = ENERGY_CAPACITY_HOURS * 60 * 60 * 1000;
-const FREE_TIER_YIELD_PER_HOUR = 350 / 24;
 
 router.post('/claim', async (req, res) => {
     try {
         const { telegramId } = req.body;
-        if (!telegramId) return res.status(400).json({ message: 'telegramId es requerido.' });
-
         const user = await User.findOne({ telegramId });
         if (!user) return res.status(404).json({ message: 'Usuario no encontrado.' });
 
         const elapsedTime = Date.now() - new Date(user.lastClaim).getTime();
-        const cappedElapsedTime = Math.min(elapsedTime, CYCLE_DURATION_MS);
-        const totalYieldPerHour = FREE_TIER_YIELD_PER_HOUR + user.boostYieldPerHour;
-        const reward = (cappedElapsedTime / (3600 * 1000)) * totalYieldPerHour;
+        const maxTime = ENERGY_CAPACITY_HOURS * 60 * 60 * 1000;
+        const accruedTime = Math.min(elapsedTime, maxTime);
 
-        if (reward < 0.0001) return res.status(400).json({ message: 'No hay suficiente recompensa para reclamar.' });
-
-        user.autBalance += reward;
-        user.totalMinedAUT += reward;
-        user.lastClaim = new Date();
-        const updatedUser = await user.save();
-
-        const newTransaction = new Transaction({
-            telegramId: user.telegramId, type: 'claim',
-            description: 'Reclamo de Minería', amount: `+${reward.toFixed(0)} AUT`
-        });
-        await newTransaction.save();
+        if (accruedTime < 60000) { // No se puede reclamar antes de 1 minuto
+            return res.status(400).json({ message: 'Debes esperar un poco más para reclamar.' });
+        }
         
-        res.status(200).json({ message: 'Recompensa reclamada.', user: updatedUser });
+        const totalYieldPerHour = (350 / 24) + user.boostYieldPerHour;
+        const earnedAmount = (accruedTime / (1000 * 60 * 60)) * totalYieldPerHour;
+        
+        // --- INICIO DE CORRECCIÓN ---
+        const oldBalance = user.autBalance;
+        user.autBalance += earnedAmount;
+        user.lastClaim = new Date();
+        
+        // Creamos la transacción correctamente
+        await Transaction.create({
+            userId: user._id,
+            type: 'claim_mining',
+            currency: 'AUT',
+            amount: earnedAmount, // Es un número
+            status: 'completed',
+            details: 'Reclamo de minería'
+        });
+        
+        const updatedUser = await user.save();
+        // --- FIN DE CORRECCIÓN ---
+
+        res.status(200).json({
+            message: `¡Has reclamado ${earnedAmount.toFixed(0)} AUT!`,
+            user: updatedUser
+        });
     } catch (error) {
-        console.error('Error al reclamar:', error);
-        res.status(500).json({ message: 'Error del servidor.' });
+        console.error("Error al reclamar:", error);
+        res.status(500).json({ message: 'Error del servidor al reclamar.' });
     }
 });
+
 module.exports = router;
