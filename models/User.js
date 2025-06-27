@@ -1,7 +1,6 @@
 const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
-    // ... (tus campos existentes: telegramId, firstName, etc.)
     telegramId: { type: Number, required: true, unique: true, index: true },
     firstName: { type: String, required: true },
     username: { type: String, required: false },
@@ -14,25 +13,10 @@ const userSchema = new mongoose.Schema({
     storageCapacity: { type: Number, default: (350 / 24) * 8 },
     referrerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     referrals: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-    activeReferrals: { type: Number, default: 0 },
     lastWithdrawalRequest: { type: Date, default: null },
-    missions: {
-        joinedGroup: { type: Boolean, default: false },
-        firstBoostPurchased: { type: Boolean, default: false },
-        invitedUsersCount: { type: Number, default: 0 },
-        claimedInviteReward: { type: Boolean, default: false }
-    },
-    
-    // --- INICIO DE NUEVOS CAMPOS ---
-    referralEarnings: { // Total de USDT ganados por comisiones
-        type: Number, 
-        default: 0 
-    },
-    hasMadeDeposit: { // Se vuelve 'true' después del primer depósito exitoso
-        type: Boolean, 
-        default: false 
-    }
-    // --- FIN DE NUEVOS CAMPOS ---
+    hasMadeDeposit: { type: Boolean, default: false },
+    referralEarnings: { type: Number, default: 0 },
+    completedTasks: [{ type: String }]
 }, { timestamps: true });
 
 userSchema.statics.findOrCreate = async function(tgUser) {
@@ -44,7 +28,6 @@ userSchema.statics.findOrCreate = async function(tgUser) {
             firstName: tgUser.first_name || tgUser.firstName || 'Usuario',
             username: tgUser.username,
             photoUrl: tgUser.photo_url || tgUser.photoUrl,
-            // Asignamos explícitamente el valor inicial para que no haya dudas
             boostYieldPerHour: 0,
         });
         await user.save();
