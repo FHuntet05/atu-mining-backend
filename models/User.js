@@ -9,7 +9,7 @@ const userSchema = new mongoose.Schema({
     usdtBalance: { type: Number, default: 0 },
     usdtForWithdrawal: { type: Number, default: 0 },
     lastClaim: { type: Date, default: Date.now },
-     activeBoosts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'ActiveBoost' }]
+    activeBoosts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'ActiveBoost' }],
     storageCapacity: { type: Number, default: (350 / 24) * 8 },
     referrerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     referrals: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
@@ -28,7 +28,6 @@ userSchema.statics.findOrCreate = async function(tgUser) {
             firstName: tgUser.first_name || tgUser.firstName || 'Usuario',
             username: tgUser.username,
             photoUrl: tgUser.photo_url || tgUser.photoUrl,
-            boostYieldPerHour: 0,
         });
         await user.save();
     }
