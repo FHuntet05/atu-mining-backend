@@ -24,7 +24,7 @@ router.use('/tasks', taskRoutes); // Esta línea ya es correcta.
 router.use('/transactions', transactionRoutes);
 router.use('/withdrawals', withdrawalRoutes);
 router.use('/leaderboard', leaderboardRoutes);
-
+router.use('/boosts', boostRoutes);
 
 // Exportar el enrutador principal que contiene todas las rutas
 module.exports = router;
