@@ -20,7 +20,7 @@ exports.purchaseWithBalance = async (req, res) => {
             return res.status(400).json({ message: "Datos de la compra inválidos." });
         }
 
-        const user = await User.findOne({ telegramId }).session(session);
+         const user = await User.findOne({ telegramId }).session(session);
         const boostToBuy = BOOSTS_CONFIG.find(b => b.id === boostId);
 
         if (!user) {
@@ -40,23 +40,25 @@ exports.purchaseWithBalance = async (req, res) => {
             return res.status(400).json({ message: "Tu saldo de depósito es insuficiente." });
         }
 
-        // --- Aplicamos los cambios al usuario ---
-        // 1. Restamos el coste del saldo de depósito del usuario
-        user.usdtBalance -= totalCost;
-
-        // 2. Calculamos y añadimos el aumento de producción por hora
-        const yieldIncreasePerHour = (boostToBuy.dailyYield / 24) * purchaseQuantity;
-        user.boostYieldPerHour += yieldIncreasePerHour;
+       // --- Aplicamos los cambios al usuario ---
+        user.usdtBalance -= (boostToBuy.price * quantity);
+        user.boostYieldPerHour += (boostToBuy.dailyYield / 24) * quantity;
+       
+        // --- INICIO DE CORRECCIÓN ---
+        // Marcamos la misión como completada si es la primera compra
+        if (!user.hasMadeDeposit) { // Usamos hasMadeDeposit como proxy de primera compra
+            user.hasMadeDeposit = true;
+        }
+        user.missions.firstBoostPurchased = true;
+        // --- FIN DE CORRECCIÓN ---
         
         // 3. Registramos la transacción de compra
         await Transaction.create([{
-            userId: user._id,
-            type: 'purchase',
-            currency: 'USDT',
-            amount: -totalCost, // Negativo porque es un gasto del saldo
-            status: 'completed',
-            details: `Compra de ${purchaseQuantity}x ${boostToBuy.title} con saldo interno`
+            userId: user._id, type: 'purchase', currency: 'USDT',
+            amount: -(boostToBuy.price * quantity), status: 'completed',
+            details: `Compra de ${quantity}x ${boostToBuy.title} con saldo`
         }], { session });
+
 
         // Guardamos los cambios en el documento del usuario
         const updatedUser = await user.save({ session });
