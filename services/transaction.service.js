@@ -1,4 +1,4 @@
-// --- START OF FILE atu-mining-api/services/transaction.service.js (COMPLETO Y FINAL) ---
+// --- START OF FILE atu-mining-api/services/transaction.service.js (FINAL COMPLETO Y CORREGIDO) ---
 require('dotenv').config();
 const axios = require('axios');
 const cron = require('node-cron');
@@ -14,17 +14,34 @@ const DEPOSIT_WALLET_ADDRESS = process.env.DEPOSIT_WALLET_ADDRESS;
 const USDT_CONTRACT_ADDRESS = '0x55d398326f99059fF775485246999027B3197955';
 const BSCSCAN_API_URL = `https://api.bscscan.com/api?module=account&action=tokentx&contractaddress=${USDT_CONTRACT_ADDRESS}&address=${DEPOSIT_WALLET_ADDRESS}&page=1&offset=50&sort=desc&apikey=${BSCSCAN_API_KEY}`;
 const ADMIN_IDS = (process.env.ADMIN_IDS || '').split(',').map(id => parseInt(id.trim()));
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
-let botInstance;
 let processedTxHashes = new Set();
 
+// Función para notificar directamente a la API de Telegram
 const notifyAdmins = (message) => {
-    if (!botInstance || ADMIN_IDS.length === 0) return;
-    ADMIN_IDS.forEach(adminId => {
-        botInstance.telegram.sendMessage(adminId, message, { parse_mode: 'Markdown' }).catch(e => {
-            console.error(`Error notificando al admin ${adminId}: ${e.message}`);
-        });
+    if (!TELEGRAM_BOT_TOKEN || ADMIN_IDS.length === 0) {
+        console.warn("No se puede notificar a los admins: TELEGRAM_BOT_TOKEN o ADMIN_IDS no están configurados.");
+        return;
+    }
+    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+    ADMIN_IDS.forEach(chat_id => {
+        axios.post(url, {
+            chat_id,
+            text: message,
+            parse_mode: 'Markdown'
+        }).catch(e => console.error(`Error notificando al admin ${chat_id}: ${e.message}`));
     });
+};
+
+const notifyUser = (telegramId, message) => {
+    if (!TELEGRAM_BOT_TOKEN) return;
+    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+    axios.post(url, {
+        chat_id: telegramId,
+        text: message,
+        parse_mode: 'Markdown'
+    }).catch(e => console.error(`Error notificando al usuario ${telegramId}: ${e.message}`));
 };
 
 async function checkIncomingTransactions() {
@@ -40,8 +57,6 @@ async function checkIncomingTransactions() {
             const txAmount = Number(tx.value) / (10 ** parseInt(tx.tokenDecimal));
             const senderAddress = tx.from.toLowerCase();
 
-            // --- LÓGICA DE BÚSQUEDA CORREGIDA ---
-            // 1. Buscamos todas las órdenes pendientes del sender.
             const potentialPayments = await Payment.find({
                 status: 'pending',
                 senderAddress: senderAddress,
@@ -49,12 +64,10 @@ async function checkIncomingTransactions() {
             }).sort({ createdAt: -1 });
 
             let matchingPayment = null;
-            // 2. Iteramos sobre ellas para encontrar una que coincida con el monto.
             for (const payment of potentialPayments) {
-                // Usamos una tolerancia (ej. 0.1 USDT) para el monto.
                 if (Math.abs(txAmount - payment.baseAmount) < 0.1) {
                     matchingPayment = payment;
-                    break; // Encontramos la correcta, salimos del bucle.
+                    break;
                 }
             }
             
@@ -82,8 +95,10 @@ async function checkIncomingTransactions() {
                     }], { session });
 
                     await session.commitTransaction();
+                    
+                    const userMessage = `✅ ¡Felicidades! Tu compra de *${matchingPayment.quantity}x del boost '${matchingPayment.boostId}'* ha sido procesada.`;
+                    notifyUser(user.telegramId, userMessage);
 
-                    botInstance.telegram.sendMessage(user.telegramId, `✅ ¡Felicidades! Tu compra de *${matchingPayment.quantity}x del boost '${matchingPayment.boostId}'* ha sido procesada.`, { parse_mode: 'Markdown' }).catch(()=>{});
                 } catch (error) {
                     await session.abortTransaction();
                     console.error("Error al procesar compra automática:", error);
@@ -99,8 +114,7 @@ async function checkIncomingTransactions() {
                     const adminMessage = `🚨 *TRANSACCIÓN ANÓMALA* 🚨\n\n` +
                                          `De: \`${senderAddress}\`\n` +
                                          `Monto: \`${txAmount.toFixed(4)} USDT\`\n` +
-                                         `TxHash: \`${tx.hash}\`\n\n` +
-                                         `No coincide con ninguna orden de compra pendiente.`;
+                                         `TxHash: \`${tx.hash}\``;
                     notifyAdmins(adminMessage);
                 }
                 processedTxHashes.add(tx.hash);
@@ -111,11 +125,10 @@ async function checkIncomingTransactions() {
     }
 }
 
-function startCheckingTransactions(bot) {
-    botInstance = bot;
-    console.log("🚀 Vigilante de transacciones v3 iniciado.");
+function startCheckingTransactions() {
+    console.log("🚀 Vigilante v5 (autónomo) iniciado.");
     cron.schedule('*/30 * * * * *', checkIncomingTransactions);
 }
 
 module.exports = { startCheckingTransactions };
-// --- END OF FILE atu-mining-api/services/transaction.service.js (COMPLETO Y FINAL) ---
+// --- END OF FILE atu-mining-api/services/transaction.service.js (FINAL COMPLETO Y CORREGIDO) ---
