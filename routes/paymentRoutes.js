@@ -2,9 +2,9 @@
 
 const express = require('express');
 const router = express.Router();
-const User = require('../models/User');
-const Payment = require('../models/Payment');
-const BOOSTS_CONFIG = require('../config/boosts');
+const User = require('../models/User.js');
+const Payment = require('../models/Payment.js');
+const BOOSTS_CONFIG = require('../config/boosts.js');
 
 const DEPOSIT_WALLET_ADDRESS = process.env.DEPOSIT_WALLET_ADDRESS;
 

@@ -1,7 +1,7 @@
 // --- START OF FILE atu-mining-api/routes/referralRoutes.js (FINAL Y LIMPIO) ---
 const express = require('express');
 const router = express.Router();
-const User = require('../models/User');
+const User = require('../models/User.js');
 
 const COMMISSIONS = { level1: 0.27, level2: 0.17, level3: 0.07 };
 

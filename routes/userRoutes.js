@@ -1,13 +1,13 @@
-// --- START OF FILE atu-mining-api/routes/userRoutes.js (FINAL) ---
-const express = require('express');
-const router = express.Router();
-const userController = require('../controllers/userController');
+import express from 'express';
+import * as userController from '../controllers/userController.js';
 
-// La ruta /sync ya no se define aquí.
+const router = express.Router();
 
 // Esta ruta para obtener los datos de un usuario por su ID se mantiene.
 // El archivo principal la montará en la ruta completa: /api/users/data/:telegramId
 router.get('/data/:telegramId', userController.getUserData);
 
-module.exports = router;
-// --- END OF FILE atu-mining-api/routes/userRoutes.js (FINAL) ---
+// NOTA: Si necesitas otras rutas de usuario, como /sync, añádelas aquí.
+// Ejemplo: router.post('/sync', userController.syncUser);
+
+export default router;

@@ -3,11 +3,11 @@ require('dotenv').config();
 const axios = require('axios');
 const cron = require('node-cron');
 const mongoose = require('mongoose');
-const User = require('../models/User');
-const Payment = require('../models/Payment');
-const Transaction = require('../models/Transaction');
-const AnomalousTransaction = require('../models/AnomalousTransaction');
-const { grantBoostsToUser } = require('./boost.service');
+const User = require('../models/User.js');
+const Payment = require('../models/Payment.js');
+const Transaction = require('../models/Transaction.js');
+const AnomalousTransaction = require('../models/AnomalousTransaction.js');
+const { grantBoostsToUser } = require('./boost.service.js');
 
 const BSCSCAN_API_KEY = process.env.BSCSCAN_API_KEY;
 const DEPOSIT_WALLET_ADDRESS = process.env.DEPOSIT_WALLET_ADDRESS;

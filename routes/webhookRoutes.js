@@ -4,9 +4,9 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
-const Payment = require('../models/Payment');
-const User = require('../models/User');
-const Transaction = require('../models/Transaction');
+const Payment = require('../models/Payment.js');
+const User = require('../models/User.js');
+const Transaction = require('../models/Transaction.js');
 
 const COMMISSIONS = { level1: 0.27, level2: 0.17, level3: 0.07 };
 

@@ -2,7 +2,7 @@
 
 const express = require('express');
 const router = express.Router();
-const taskController = require('../controllers/taskController');
+const taskController = require('../controllers/taskController.js');
 
 // Ruta para obtener el estado de todas las tareas de un usuario
 router.get('/:telegramId', taskController.getTasks);

@@ -1,6 +1,4 @@
-// --- START OF FILE atu-mining-backend/models/User.js ---
-
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const userSchema = new mongoose.Schema({
     telegramId: { type: Number, required: true, unique: true, index: true },
@@ -46,5 +44,4 @@ userSchema.statics.findOrCreate = async function(tgUser) {
 };
 
 const User = mongoose.model('User', userSchema);
-module.exports = User;
-// --- END OF FILE atu-mining-backend/models/User.js ---
+export default User;
