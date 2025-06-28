@@ -1,97 +1,135 @@
-// =================================================================
-// =========== INICIO DE LA LÓGICA DEL BOT DE TELEGRAM =============
-// =================================================================
+import 'dotenv/config';
+import express from 'express';
+import mongoose from 'mongoose';
+import cors from 'cors';
+import { Telegraf } from 'telegraf';
 
-// ... (todo el código de los comandos /start y /addboost se queda igual)
+// --- IMPORTACIÓN DE RUTAS, SERVICIOS Y MODELOS ---
+import userRoutes from './routes/userRoutes.js';
+import boostRoutes from './routes/boostRoutes.js';
+import taskRoutes from './routes/taskRoutes.js';
+import referralRoutes from './routes/referralRoutes.js';
+import paymentRoutes from './routes/paymentRoutes.js';
+import * as boostService from './services/boost.service.js';
+import User from './models/User.js';
 
-// =================================================================
-// === CONFIGURACIÓN DEL WEBHOOK Y ARRANQUE DEL SERVIDOR (MODIFICADO) ==
-// =================================================================
+const app = express();
+const PORT = process.env.PORT || 3001;
 
-// --- DIAGNÓSTICO DE VARIABLES DE ENTORNO ---
-console.log("--- DIAGNOSTICANDO VARIABLES DE TELEGRAM ---");
-console.log(`RENDER_EXTERNAL_URL: ${process.env.RENDER_EXTERNAL_URL}`);
-console.log(`TELEGRAM_BOT_TOKEN: ${process.env.TELEGRAM_BOT_TOKEN ? 'Presente (Oculto por seguridad)' : '!!! AUSENTE !!!'}`);
-console.log(`TELEGRAM_SECRET_TOKEN: ${process.env.TELEGRAM_SECRET_TOKEN ? process.env.TELEGRAM_SECRET_TOKEN : '!!! AUSENTE !!!'}`);
-console.log("-----------------------------------------");
-
-// --- Lógica de arranque robusta ---
-const startServer = async () => {
-    try {
-        // Asegurémonos de que las variables críticas existan antes de continuar
-        if (!process.env.RENDER_EXTERNAL_URL || !process.env.TELEGRAM_SECRET_TOKEN || !process.env.TELEGRAM_BOT_TOKEN) {
-            console.error("!!! ERROR CRÍTICO: Faltan una o más variables de entorno de Telegram (URL, TOKEN o SECRET_TOKEN). Abortando arranque del webhook.");
-            // Aún así arrancamos el servidor de API, pero el bot no funcionará.
-            app.listen(PORT, () => {
-                console.log(`Servidor API arrancado en el puerto ${PORT}, pero el BOT ESTÁ INACTIVO por falta de variables.`);
-            });
-            return;
+// --- CONFIGURACIÓN DE CORS ---
+const allowedOrigins = [
+    'https://web.telegram.org',
+    /https:\/\/[a-zA-Z0-9-]+\.onrender\.com/ 
+];
+const corsOptions = {
+    origin: (origin, callback) => {
+        if (!origin || allowedOrigins.some(allowedOrigin => 
+            (allowedOrigin instanceof RegExp) ? allowedOrigin.test(origin) : allowedOrigin === origin
+        )) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
         }
-
-        const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
-
-        // ... (Pega aquí los handlers bot.command('start', ...) y bot.command('addboost', ...) que ya tenías)
-        // ...
-        
-        // --- COMANDO /start (Público para todos los usuarios) ---
-        bot.command('start', (ctx) => {
-            const welcomeMessage = `¡Bienvenido a ATU Mining USDT! 🚀\n\nPresiona el botón de abajo para iniciar la aplicación y comenzar a minar.`;
-            ctx.reply(welcomeMessage, {
-                reply_markup: {
-                    inline_keyboard: [[{ text: '⛏️ Abrir App de Minería', web_app: { url: process.env.FRONTEND_URL } }]]
-                }
-            });
-        });
-
-        // --- COMANDO /addboost (Solo para Administradores) ---
-        bot.command('addboost', async (ctx) => {
-            const adminIds = (process.env.ADMIN_TELEGRAM_IDS || '').split(',');
-            const userId = ctx.from.id.toString();
-            if (!adminIds.includes(userId)) {
-                return ctx.reply('❌ Acceso denegado. Este comando es solo para administradores.');
-            }
-            const parts = ctx.message.text.split(' ');
-            if (parts.length !== 4) {
-                return ctx.reply('Formato incorrecto. Uso: /addboost <ID_TELEGRAM_USUARIO> <ID_BOOST> <CANTIDAD>');
-            }
-            const targetUserId = parts[1];
-            const boostId = parts[2].toUpperCase();
-            const quantity = parseInt(parts[3], 10);
-            if (isNaN(quantity) || quantity <= 0) {
-                return ctx.reply('La cantidad debe ser un número positivo.');
-            }
-            try {
-                const targetUser = await User.findOne({ telegramId: targetUserId });
-                if (!targetUser) {
-                    return ctx.reply(`❌ Error: No se encontró un usuario con el ID de Telegram ${targetUserId}.`);
-                }
-                await boostService.addBoostToUser(targetUser._id, boostId, quantity);
-                ctx.reply(`✅ ¡Éxito! Se añadieron ${quantity} boost(s) de tipo "${boostId}" al usuario con ID de Telegram ${targetUserId}.`);
-            } catch (error) {
-                console.error(`Error en comando /addboost:`, error);
-                ctx.reply(`❌ Error al procesar el comando. Razón: ${error.message}`);
-            }
-        });
-
-        const secretPath = `/telegraf/${bot.secretPathComponent()}`;
-        
-        // El middleware del webhook. Express lo usará para las peticiones de Telegram.
-        app.use(await bot.createWebhook({ 
-            domain: process.env.RENDER_EXTERNAL_URL,
-            // Fallback por si la variable no se lee correctamente
-            secret_token: process.env.TELEGRAM_SECRET_TOKEN 
-        }));
-
-        app.listen(PORT, () => {
-            console.log(`Servidor corriendo en el puerto ${PORT}`);
-            console.log(`Webhook configurado en el dominio: ${process.env.RENDER_EXTERNAL_URL}`);
-            // NOTA: No podemos imprimir el secretPath final aquí porque se genera dentro de `createWebhook`
-            // pero podemos estar seguros de que si las variables están presentes, funcionará.
-        });
-
-    } catch (error) {
-        console.error("Error catastrófico durante el arranque del servidor:", error);
-    }
+    },
+    methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
+    credentials: true
 };
 
-startServer();
+app.use(cors(corsOptions));
+app.use(express.json());
+
+// --- CONEXIÓN A MONGODB ---
+mongoose.connect(process.env.MONGODB_URI)
+    .then(() => console.log('Successfully connected to MongoDB Atlas'))
+    .catch(err => console.error('Error connecting to MongoDB Atlas:', err));
+
+// --- REGISTRO EXPLÍCITO DE RUTAS DE LA API ---
+app.use('/api/users', userRoutes);
+app.use('/api/boosts', boostRoutes);
+app.use('/api/tasks', taskRoutes);
+app.use('/api/referrals', referralRoutes);
+app.use('/api/payments', paymentRoutes);
+
+
+// =================================================================
+// =========== LÓGICA DEL BOT DE TELEGRAM ==========================
+// =================================================================
+
+// Solo proceder si las variables del bot están presentes
+if (process.env.TELEGRAM_BOT_TOKEN && process.env.RENDER_EXTERNAL_URL && process.env.TELEGRAM_SECRET_TOKEN) {
+
+    const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
+
+    // --- COMANDO /start (Público para todos los usuarios) ---
+    bot.command('start', (ctx) => {
+        const welcomeMessage = `¡Bienvenido a ATU Mining USDT! 🚀\n\nPresiona el botón de abajo para iniciar la aplicación y comenzar a minar.`;
+        ctx.reply(welcomeMessage, {
+            reply_markup: {
+                inline_keyboard: [[{ 
+                    text: '⛏️ Abrir App de Minería', 
+                    web_app: { url: process.env.FRONTEND_URL } // Asegúrate que FRONTEND_URL está en .env
+                }]]
+            }
+        });
+    });
+
+    // --- COMANDO /addboost (Solo para Administradores) ---
+    bot.command('addboost', async (ctx) => {
+        const adminIds = (process.env.ADMIN_TELEGRAM_IDS || '').split(',');
+        const userId = ctx.from.id.toString();
+
+        if (!adminIds.includes(userId)) {
+            return ctx.reply('❌ Acceso denegado. Este comando es solo para administradores.');
+        }
+
+        const parts = ctx.message.text.split(' ');
+        if (parts.length !== 4) {
+            return ctx.reply('Formato incorrecto. Uso: /addboost <ID_TELEGRAM_USUARIO> <ID_BOOST> <CANTIDAD>');
+        }
+
+        const targetUserId = parts[1];
+        const boostId = parts[2].toUpperCase();
+        const quantity = parseInt(parts[3], 10);
+
+        if (isNaN(quantity) || quantity <= 0) {
+            return ctx.reply('La cantidad debe ser un número positivo.');
+        }
+        
+        try {
+            const targetUser = await User.findOne({ telegramId: targetUserId });
+            if (!targetUser) {
+                return ctx.reply(`❌ Error: No se encontró un usuario con el ID de Telegram ${targetUserId}.`);
+            }
+            await boostService.addBoostToUser(targetUser._id, boostId, quantity);
+            ctx.reply(`✅ ¡Éxito! Se añadieron ${quantity} boost(s) de tipo "${boostId}" al usuario con ID de Telegram ${targetUserId}.`);
+        } catch (error) {
+            console.error(`Error en comando /addboost:`, error);
+            ctx.reply(`❌ Error al procesar el comando. Razón: ${error.message}`);
+        }
+    });
+
+    // --- CONFIGURACIÓN DEL WEBHOOK ---
+    const startWebhook = async () => {
+        try {
+            const secretPath = `/telegraf/${bot.secretPathComponent()}`;
+            // El middleware que procesará las peticiones de Telegram
+            app.use(await bot.createWebhook({ 
+                domain: process.env.RENDER_EXTERNAL_URL,
+                secret_token: process.env.TELEGRAM_SECRET_TOKEN 
+            }));
+            console.log(`Webhook de Telegram configurado correctamente en la ruta secreta.`);
+        } catch (e) {
+            console.error('Error al crear el webhook de Telegram', e);
+        }
+    };
+    
+    startWebhook();
+
+} else {
+    console.warn("ADVERTENCIA: Faltan variables de entorno para el bot de Telegram (TOKEN, URL o SECRET). El bot no se iniciará.");
+}
+
+// --- ARRANQUE FINAL DEL SERVIDOR ---
+app.listen(PORT, () => {
+    console.log(`Servidor Express corriendo en el puerto ${PORT}`);
+});
