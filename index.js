@@ -1,103 +1,57 @@
-// --- Importaciones de Módulos ---
+// --- START OF FILE atu-mining-api/index.js (CORREGIDO) ---
 require('dotenv').config();
-
-const { Telegraf, Markup } = require('telegraf');
-const mongoose = require('mongoose');
 const express = require('express');
 const cors = require('cors');
+const mongoose = require('mongoose');
 
-// --- Importaciones de Módulos Locales ---
-const User = require('./models/User.js');
-const transactionService = require('./services/transaction.service.js');
-const apiRoutes = require('./routes/index.js');
+// Importamos el enrutador principal que contiene todas nuestras rutas
+const mainRoutes = require('./routes'); 
+// Importamos el vigilante
+const { startCheckingTransactions } = require('./services/transaction.service');
 
-// --- Configuración de la Aplicación Express ---
 const app = express();
-app.use(cors());
+
+// --- MIDDLEWARE ESENCIAL ---
+
+// 1. Configuración de CORS para permitir peticiones desde tu frontend
+// (Asegúrate de cambiar la URL por la de tu frontend real)
+const corsOptions = {
+    // Aquí deben ir las URLs de confianza. La de tu app y la de Telegram para pruebas.
+    origin: ['https://atu-mining-app-7e6s.onrender.com', 'https://web.telegram.org'],
+    optionsSuccessStatus: 200
+};
+app.use(cors(corsOptions));
+
+// 2. Middleware para parsear JSON en las peticiones
 app.use(express.json());
 
-// --- Conexión a la Base de Datos MongoDB ---
+// --- CONEXIÓN A LA BASE DE DATOS ---
 mongoose.connect(process.env.DATABASE_URL)
-  .then(() => console.log('✅ MongoDB conectado exitosamente.'))
-  .catch(err => console.error('❌ Error de conexión a MongoDB:', err));
+    .then(() => {
+        console.log('✅ API: Conectado a MongoDB.');
+        // Iniciamos el vigilante SOLO si la conexión a la DB es exitosa
+        startCheckingTransactions(); 
+    })
+    .catch(err => console.error('❌ API: Error de conexión a MongoDB:', err));
 
-// --- Verificación de Variables de Entorno Críticas ---
-if (!process.env.BOT_TOKEN || !process.env.WEBHOOK_URL) {
-    console.error('❌ ERROR CRÍTICO: Las variables de entorno BOT_TOKEN y WEBHOOK_URL son requeridas.');
-    process.exit(1);
-}
 
-// --- Inicialización del Bot de Telegram ---
-const bot = new Telegraf(process.env.BOT_TOKEN);
-app.locals.bot = bot;
-// --- Lógica del Bot (Comandos, Eventos, etc.) ---
+// --- REGISTRO DE RUTAS (LA CORRECCIÓN CLAVE) ---
+// Aquí le decimos a Express que TODAS las rutas definidas en 'mainRoutes'
+// estarán bajo el prefijo '/api'.
+// Esto asegura que una petición a '/api/users/sync' funcione.
+app.use('/api', mainRoutes);
 
-// --- INICIO DE LA MODIFICACIÓN: Nuevo Mensaje de Bienvenida ---
-bot.start(async (ctx) => {
-  try {
-    // Usamos el método centralizado para encontrar o crear al usuario.
-    const user = await User.findOrCreate(ctx.from);
-    
-    // Usamos el `firstName` del usuario para el mensaje, ya que el `username` puede no existir.
-    const username = user.firstName || 'MINERO'; 
 
-    // Lógica de Referidos (si aplica)
-    const startPayload = ctx.startPayload;
-    if (startPayload && !user.referrerId && user.telegramId.toString() !== startPayload) {
-        const referrer = await User.findOne({ telegramId: startPayload });
-        if (referrer) {
-            if (!referrer.referrals.includes(user._id)) {
-                user.referrerId = referrer._id;
-                await user.save();
-                referrer.referrals.push(user._id);
-                await referrer.save();
-            }
-        }
-    }
-    
-    // Aquí está tu nuevo mensaje de bienvenida, formateado y listo.
-    const welcomeMessage = `⚡️ ¡BIENVENIDO/A, ${username.toUpperCase()}! ⚒️\n\n` +
-        `🚀 ¡Prepárate para una aventura de minería legendaria!\n\n` +
-        `✅ Completa desafíos diarios y gana recompensas en AUT Coins 💰.\n` +
-        `⛏️ Mejora tu equipo de minería para aumentar tus ganancias.\n` +
-        `🌐 Forma alianzas con otros mineros y domina el ranking.\n\n` +
-        `👇 ¡Haz clic en Minar Ahora! para iniciar!\n` +
-        `🕒 Únete antes de que se agoten las bonificaciones.` ;
-
-    // Enviamos el mensaje de bienvenida junto con el botón para abrir la Mini App.
-    await ctx.reply(welcomeMessage, {
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: "💎 Minar Ahora!", web_app: { url: process.env.MINI_APP_URL } }]
-        ]
-      }
-    });
-
-  } catch (error) {
-    console.error('Error en el comando /start:', error);
-    await ctx.reply('Ocurrió un error al iniciar. Por favor, intenta de nuevo más tarde.');
-  }
+// --- Endpoint de salud para Render ---
+app.get('/', (req, res) => {
+    res.send('ATU Mining API está en línea y funcionando.');
 });
-// --- FIN DE LA MODIFICACIÓN ---
 
 
-// --- Configuración de Rutas de la API ---
-app.use('/api', apiRoutes);
-
-// --- Lógica de Webhook ---
-const secretPath = `/telegraf/${bot.secretPathComponent()}`;
-app.use(bot.webhookCallback(secretPath));
-
-// --- Lanzamiento del Servidor ---
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, async () => {
-  console.log(`✅ Servidor Express escuchando en el puerto ${PORT}`);
-  try {
-    const webhookUrl = `${process.env.WEBHOOK_URL}${secretPath}`;
-    await bot.telegram.setWebhook(webhookUrl);
-    console.log(`✅ Webhook configurado exitosamente en Telegram.`);
-  } catch (error) {
-    console.error('❌ Error fatal al configurar el webhook:', error);
-  }
-  transactionService.startCheckingTransactions(bot);
+// --- LANZAMIENTO DEL SERVIDOR ---
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`✅ API: Servidor escuchando en el puerto ${PORT}`);
 });
+
+// --- END OF FILE atu-mining-api/index.js (CORREGIDO) ---
