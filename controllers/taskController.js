@@ -1,90 +1,119 @@
+// --- START OF FILE atu-mining-api/controllers/taskController.js (VERSIÓN CORREGIDA Y UNIFICADA) ---
+
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
-const TASKS = require('../config/tasks'); // Mantenemos tu configuración de tareas
+const TASKS = require('../config/tasks');
 
 const GROUP_CHAT_ID = process.env.GROUP_CHAT_ID;
 
 /**
- * Obtiene el estado de todas las tareas para un usuario, verificando contra el modelo 'missions'.
+ * Obtiene el estado de todas las tareas para un usuario.
+ * Combina la verificación en la base de datos con la verificación en tiempo real (si es necesario).
  */
 exports.getTasks = async (req, res) => {
     try {
         const { telegramId } = req.params;
-        const bot = req.app.locals.bot;
         const user = await User.findOne({ telegramId });
 
         if (!user) {
             return res.status(404).json({ message: 'Usuario no encontrado.' });
         }
 
+        // Accedemos al bot desde app.locals, donde debería estar la instancia principal de Telegraf.
+        const bot = req.app.get('bot');
+
         const userTasks = await Promise.all(TASKS.map(async (task) => {
-            let isCompleted = false;
-            let claimed = false; // El estado 'claimed' también se deriva de 'missions'
+            // El estado de completado y reclamado se basa en el array `completedTasks` del usuario.
+            const isCompletedAndClaimed = (user.completedTasks || []).includes(task.id);
+            let isCompleted = isCompletedAndClaimed;
 
-            // --- INICIO DE LA LÓGICA CORREGIDA ---
-            // Verificamos el estado usando el objeto 'user.missions' que sí existe
-            switch (task.type) {
-                case 'join_group':
-                    isCompleted = user.missions.joinedGroup;
-                    claimed = user.missions.joinedGroup;
-                    break;
-                case 'first_boost':
-                    isCompleted = user.missions.firstBoostPurchased;
-                    claimed = user.missions.firstBoostPurchased;
-                    break;
-                case 'invite_10':
-                    isCompleted = (user.missions.invitedUsersCount || 0) >= 10;
-                    claimed = user.missions.claimedInviteReward;
-                    break;
-                default:
-                    break;
-            }
-            // --- FIN DE LA LÓGICA CORREGIDA ---
-
-            // Mantenemos tu lógica de verificación en tiempo real, ¡es una buena idea!
-            if (task.type === 'join_group' && !isCompleted && GROUP_CHAT_ID) {
+            // Verificación en tiempo real para la tarea de unirse al grupo, si aún no está completada.
+            if (task.type === 'join_group' && !isCompleted && GROUP_CHAT_ID && bot) {
                 try {
                     const chatMember = await bot.telegram.getChatMember(GROUP_CHAT_ID, telegramId);
                     if (['member', 'administrator', 'creator'].includes(chatMember.status)) {
-                        isCompleted = true;
-                        // Si lo encontramos, lo actualizamos para futuras consultas
-                        if (!user.missions.joinedGroup) {
-                            user.missions.joinedGroup = true;
-                            await user.save();
-                        }
+                        isCompleted = true; // El usuario está en el grupo, puede reclamar.
                     }
                 } catch (e) {
-                    console.log(`No se pudo verificar al usuario ${telegramId} en el grupo.`);
+                    // Falla silenciosamente si el bot no puede verificar (ej. el usuario no está en el grupo)
+                    console.log(`No se pudo verificar al usuario ${telegramId} en el grupo ${GROUP_CHAT_ID}.`);
                 }
             }
             
-            return { ...task, isCompleted, claimed };
+            // Para otras tareas como 'first_boost' o 'invite_10', la lógica de completado
+            // debe ser manejada en sus respectivos flujos (ej. en boostController).
+            // Por ahora, asumimos que si no está en `completedTasks`, no está hecha.
+
+            return { 
+                ...task, 
+                isCompleted, // Indica si la condición se cumple AHORA.
+                claimed: isCompletedAndClaimed // Indica si la recompensa ya fue reclamada.
+            };
         }));
 
         res.status(200).json(userTasks);
     } catch (error) {
-        console.error("Error en GET /api/tasks:", error);
+        console.error("Error en getTasks:", error);
         res.status(500).json({ message: 'Error del servidor al obtener tareas.' });
     }
 };
 
 /**
- * Permite a un usuario reclamar la recompensa de una tarea.
- * Esta lógica es compleja y depende de cómo se completan las tareas.
- * En nuestro modelo, la mayoría de las recompensas se dan automáticamente.
+ * Permite a un usuario reclamar la recompensa de una tarea completada.
  */
 exports.claimTask = async (req, res) => {
     try {
-        // La lógica de reclamo manual es compleja con el modelo actual, ya que las recompensas
-        // se otorgan automáticamente cuando se completa una misión (ej. al unirse a un grupo,
-        // al comprar un boost, o al llegar al 10º referido).
+        const { telegramId, taskId } = req.body;
+        const user = await User.findOne({ telegramId });
+        const task = TASKS.find(t => t.id === taskId);
+
+        if (!user || !task) {
+            return res.status(404).json({ message: 'Usuario o tarea no encontrada.' });
+        }
+
+        if ((user.completedTasks || []).includes(taskId)) {
+            return res.status(400).json({ message: 'Ya has reclamado esta tarea.' });
+        }
+
+        // Lógica de verificación final antes de pagar
+        if (task.type === 'join_group') {
+            const bot = req.app.get('bot');
+            if (!GROUP_CHAT_ID || !bot) return res.status(400).json({ message: 'La verificación del grupo no está disponible.' });
+            
+            try {
+                const chatMember = await bot.telegram.getChatMember(GROUP_CHAT_ID, telegramId);
+                if (!['member', 'administrator', 'creator'].includes(chatMember.status)) {
+                    return res.status(400).json({ message: 'Debes unirte al grupo para reclamar.' });
+                }
+            } catch (e) {
+                return res.status(400).json({ message: 'No se pudo confirmar que estás en el grupo.' });
+            }
+        }
         
-        // Esta ruta podría usarse en el futuro para tareas que requieran un clic explícito para reclamar.
+        // Aquí se añadirían verificaciones para otros tipos de tareas si fuera necesario.
+
+        user.autBalance += task.reward;
+        user.completedTasks.push(taskId);
+
+        await Transaction.create({
+            userId: user._id,
+            type: 'claim_task',
+            currency: 'AUT',
+            amount: task.reward,
+            status: 'completed',
+            details: `Recompensa por tarea: ${task.title}`
+        });
+
+        const updatedUser = await user.save();
         
-        return res.status(400).json({ message: 'Las recompensas de las tareas se otorgan automáticamente al completarlas.' });
+        res.status(200).json({ 
+            message: `¡Recompensa de ${task.reward.toLocaleString()} AUT reclamada!`, 
+            user: updatedUser 
+        });
 
     } catch (error) {
-        console.error("Error en POST /api/tasks/claim:", error);
+        console.error("Error en claimTask:", error);
         res.status(500).json({ message: 'Error del servidor al reclamar la tarea.' });
     }
 };
+// --- END OF FILE atu-mining-api/controllers/taskController.js ---

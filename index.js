@@ -1,13 +1,14 @@
-// --- START OF FILE atu-mining-api/index.js (SOLUCIÓN DEFINITIVA A PRUEBA DE ERRORES) ---
+// --- START OF FILE atu-mining-api/index.js (VERSIÓN FINAL CORREGIDA CON BOT) ---
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
+const { Telegraf } = require('telegraf');
 
 // Importamos el enrutador principal para el RESTO de las rutas
 const mainRoutes = require('./routes/index'); 
 
-// --- ¡IMPORTANTE! Importamos el userController directamente ---
+// Importamos el userController directamente
 const userController = require('./controllers/userController');
 
 const { startCheckingTransactions } = require('./services/transaction.service');
@@ -17,6 +18,7 @@ const app = express();
 // --- MIDDLEWARE ---
 const corsOptions = {
     origin: function (origin, callback) {
+        // Permite peticiones sin 'origin' (como las de Postman o scripts locales) y desde dominios de confianza
         if (!origin || origin.endsWith('.onrender.com') || origin.startsWith('https://web.telegram.org')) {
             callback(null, true);
         } else {
@@ -29,30 +31,56 @@ app.use(cors(corsOptions));
 app.use(express.json());
 
 
+// ===================================================================
+// ============ INICIALIZACIÓN DEL BOT DE TELEGRAM (CLAVE) ===========
+// ===================================================================
+
+// 1. Creamos la instancia del bot con el TOKEN desde .env
+const bot = new Telegraf(process.env.BOT_TOKEN);
+
+// 2. ¡ESTA LÍNEA ES LA CLAVE! Hace que 'bot' esté disponible en toda la app.
+//    Ahora, `req.app.get('bot')` funcionará en los controladores.
+app.set('bot', bot);
+
+// 3. Configuramos el Webhook para recibir actualizaciones de Telegram en Render
+//    Express escuchará en esta ruta secreta las peticiones de Telegram.
+const secretPath = `/telegraf/${bot.secretPathComponent()}`;
+app.use(bot.webhookCallback(secretPath));
+
+// NOTA: Recuerda establecer la URL del webhook en Telegram para que apunte a tu servicio.
+// Puedes hacerlo una vez con una petición cURL o un script. Ejemplo:
+// curl -F "url=https://TU_APP_API.onrender.com${secretPath}" https://api.telegram.org/botTOKEN/setWebhook
+// Reemplaza TU_APP_API con el nombre de tu servicio web en Render y botTOKEN con tu token.
+bot.telegram.getWebhookInfo().then(info => {
+  console.log('Webhook Info:', info);
+});
+
+// Puedes añadir aquí comandos básicos del bot si lo necesitas
+bot.start((ctx) => ctx.reply('¡Hola! Soy el bot de ATU Mining. Abre la app para empezar a minar.'));
+
+// ===================================================================
+// ===================== FIN DE LA CONFIGURACIÓN DEL BOT ==============
+// ===================================================================
+
+
 // --- CONEXIÓN A LA BASE DE DATOS ---
 mongoose.connect(process.env.DATABASE_URL)
     .then(() => {
         console.log('✅ API: Conectado a MongoDB.');
+        // Inicia el vigilante de transacciones DESPUÉS de conectar a la DB
         startCheckingTransactions();
     })
     .catch(err => console.error('❌ API: Error de conexión a MongoDB:', err));
 
 
-// =================================================================
-// =============== INICIO DE LA SOLUCIÓN DEFINITIVA =================
-// =================================================================
+// --- RUTAS DE LA APLICACIÓN ---
 
-// 1. DEFINIMOS LA RUTA PROBLEMÁTICA EXPLÍCITAMENTE EN LA APP.
-//    Esto garantiza que exista antes que cualquier otra cosa.
+// Ruta explícita para /api/users/sync
 app.post('/api/users/sync', userController.syncUser);
 
-// 2. USAMOS EL ENRUTADOR PRINCIPAL PARA TODAS LAS DEMÁS RUTAS.
-//    El archivo routes/index.js montará el resto (ej: /api/boosts, /api/tasks, etc.)
-app.use('/', mainRoutes);
-
-// =================================================================
-// ================= FIN DE LA SOLUCIÓN DEFINITIVA ==================
-// =================================================================
+// Usamos el enrutador principal para todas las demás rutas bajo /api
+// (Ej: /api/tasks, /api/boosts, etc.)
+app.use('/api', mainRoutes);
 
 
 // --- Endpoint de salud ---
@@ -67,4 +95,4 @@ app.listen(PORT, () => {
     console.log(`✅ API: Servidor escuchando en el puerto ${PORT}`);
 });
 
-// --- END OF FILE atu-mining-api/index.js (SOLUCIÓN DEFINITIVA A PRUEBA DE ERRORES) ---
+// --- END OF FILE atu-mining-api/index.js ---
