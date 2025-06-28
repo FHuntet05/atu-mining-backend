@@ -58,15 +58,6 @@ app.use('/api/transactions', transactionRoutes);
 app.use('/api/withdrawals', withdrawalRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/referrals', referralRoutes); // Registramos la ruta de referidos
-
-// --- 5. WEBHOOK Y LANZAMIENTO DEL SERVIDOR ---
-const secretPath = `/telegraf/${bot.secret}`;
-bot.telegram.setWebhook(`${process.env.WEBHOOK_URL}${secretPath}`);
-app.use(bot.webhookCallback(secretPath));
-
-
-app.get('/', (req, res) => res.send('ATU Mining API está en línea. OK.'));
-const PORT = process.env.PORT || 3000;
 bot.start((ctx) => {
     // URL de una imagen de bienvenida. Puedes crear una y subirla a un host como Imgur o Postimages.
     const welcomeImageUrl = 'https://postimg.cc/hQtL6wsT'; // URL de ejemplo, ¡cámbiala!
@@ -105,6 +96,64 @@ Prepárate para sumergirte en el mundo de la minería de criptomonedas.
         });
     });
 });
+
+bot.command('addboost', async (ctx) => {
+    // Verificamos si el que envía el comando es un admin
+    if (!ADMIN_IDS.includes(ctx.from.id)) {
+        return ctx.reply('Este comando es solo para administradores.');
+    }
+
+    const args = ctx.message.text.split(' ').slice(1);
+    if (args.length !== 3) {
+        return ctx.reply('⚠️ Formato incorrecto.\nUso: /addboost <telegramId> <boostId> <quantity>');
+    }
+
+    const [telegramId, boostId, quantityStr] = args;
+    const quantity = parseInt(quantityStr, 10);
+    const boostConfig = BOOSTS_CONFIG.find(b => b.id === boostId);
+
+    if (isNaN(parseInt(telegramId)) || !boostConfig || isNaN(quantity) || quantity <= 0) {
+        return ctx.reply('⚠️ Datos inválidos. Verifica el ID, boostId y cantidad.');
+    }
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        const user = await User.findOne({ telegramId: parseInt(telegramId) }).session(session);
+        if (!user) throw new Error(`Usuario con ID ${telegramId} no encontrado.`);
+
+        await grantBoostsToUser({ userId: user._id, boostId, quantity, session });
+
+        await Transaction.create([{
+            userId: user._id, type: 'purchase', currency: 'USDT', amount: 0,
+            status: 'completed',
+            details: `Asignación manual de ${quantity}x ${boostConfig.title} por Admin ID: ${ctx.from.id}`
+        }], { session });
+
+        await session.commitTransaction();
+
+        ctx.reply(`✅ Éxito! Se asignó ${quantity}x ${boostConfig.title} a ${user.firstName} (${user.telegramId}).`);
+        
+        bot.telegram.sendMessage(user.telegramId, `🎉 Un administrador ha procesado tu compra y te ha asignado ${quantity}x ${boostConfig.title}. ¡Ya está activo!`).catch(()=>{});
+ } catch (error) {
+        await session.abortTransaction();
+        ctx.reply(`❌ Error al asignar el boost: ${error.message}`);
+    } finally {
+        session.endSession();
+    }
+});
+
+// --- 5. WEBHOOK Y LANZAMIENTO DEL SERVIDOR ---
+const secretPath = `/telegraf/${bot.secret}`;
+bot.telegram.setWebhook(`${process.env.WEBHOOK_URL}${secretPath}`);
+app.use(bot.webhookCallback(secretPath));
+
+
+app.get('/', (req, res) => res.send('ATU Mining API está en línea. OK.'));
+const PORT = process.env.PORT || 3000;
+
+
+
 app.listen(PORT, () => {
     console.log(`✅ API: Servidor escuchando en el puerto ${PORT}`);
 });
