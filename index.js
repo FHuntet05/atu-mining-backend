@@ -65,7 +65,7 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/withdrawals', withdrawalRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
-app.use('/api/referral', referralRoutes);
+app.use('/api/referrals', referralRoutes);
 
 bot.start((ctx) => {
     // URL de una imagen de bienvenida. Puedes crear una y subirla a un host como Imgur o Postimages.
