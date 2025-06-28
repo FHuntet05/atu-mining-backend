@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const boostController = require('../controllers/boostController.js');
+const boostController = require('../controllers/boostController');
 
 // GET /api/boosts - Devuelve la lista de todos los boosts disponibles
 router.get('/', boostController.getBoosts);

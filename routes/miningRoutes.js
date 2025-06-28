@@ -2,8 +2,8 @@
 
 const express = require('express');
 const router = express.Router();
-const User = require('../models/User.js');
-const Transaction = require('../models/Transaction.js');
+const User = require('../models/User');
+const Transaction = require('../models/Transaction');
 
 const ENERGY_CAPACITY_HOURS = 8;
 const BASE_YIELD_PER_HOUR = 350 / 24;

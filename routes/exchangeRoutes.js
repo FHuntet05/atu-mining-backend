@@ -1,10 +1,10 @@
 // --- START OF FILE atu-mining-backend/routes/exchangeRoutes.js ---
 
-const express = require('express.js');
+const express = require('express');
 const router = express.Router();
-const User = require('../models/User.js');
-const Transaction =require('../models/Transaction.js');
-const ECONOMY_CONFIG = require('../config/economy.js');
+const User = require('../models/User');
+const Transaction =require('../models/Transaction');
+const ECONOMY_CONFIG = require('../config/economy');
 
 router.post('/', async (req, res) => {
     try {

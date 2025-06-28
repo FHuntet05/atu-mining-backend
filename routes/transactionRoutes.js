@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const User = require('../models/User.js');
-const Transaction = require('../models/Transaction.js');
+const User = require('../models/User');
+const Transaction = require('../models/Transaction');
 
 // Ruta GET para obtener el historial de transacciones de un usuario
 router.get('/:telegramId', async (req, res) => {

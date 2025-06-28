@@ -1,10 +1,10 @@
 // --- START OF FILE atu-mining-backend/controllers/boostController.js ---
 
 const mongoose = require('mongoose');
-const User = require('../models/User.js');
-const Transaction = require('../models/Transaction.js');
-const BOOSTS_CONFIG = require('../config/boosts.js');
-const { grantBoostsToUser } = require('../services/boost.service.js'); // IMPORTAMOS EL SERVICIO
+const User = require('../models/User');
+const Transaction = require('../models/Transaction');
+const BOOSTS_CONFIG = require('../config/boosts');
+const { grantBoostsToUser } = require('../services/boost.service'); // IMPORTAMOS EL SERVICIO
 
 exports.purchaseWithBalance = async (req, res) => {
     const session = await mongoose.startSession();

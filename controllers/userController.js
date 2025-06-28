@@ -1,6 +1,6 @@
 // --- START OF FILE atu-mining-api/controllers/userController.js (FINAL) ---
-const User = require('../models/User.js');
-const ECONOMY_CONFIG = require('../config/economy.js');
+const User = require('../models/User');
+const ECONOMY_CONFIG = require('../config/economy');
 
 const syncUser = async (req, res) => {
     try {

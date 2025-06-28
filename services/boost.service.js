@@ -1,11 +1,11 @@
 // --- START OF FILE atu-mining-backend/services/boost.service.js ---
 
 const mongoose = require('mongoose');
-const User = require('../models/User.js');
-const ActiveBoost = require('../models/ActiveBoost.js');
-const Transaction = require('../models/Transaction.js');
-const BOOSTS_CONFIG = require('../config/boosts.js');
-const TASKS_CONFIG = require('../config/tasks.js');
+const User = require('../models/User');
+const ActiveBoost = require('../models/ActiveBoost');
+const Transaction = require('../models/Transaction');
+const BOOSTS_CONFIG = require('../config/boosts');
+const TASKS_CONFIG = require('../config/tasks');
 
 /**
  * Asigna uno o más boosts a un usuario y maneja las recompensas/comisiones asociadas.

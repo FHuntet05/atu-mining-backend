@@ -3,9 +3,9 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
-const User = require('../models/User.js');
-const Transaction = require('../models/Transaction.js');
-const ECONOMY_CONFIG = require('../config/economy.js');
+const User = require('../models/User');
+const Transaction = require('../models/Transaction');
+const ECONOMY_CONFIG = require('../config/economy');
 
 const ADMIN_IDS = (process.env.ADMIN_IDS || '').split(',').map(id => parseInt(id.trim()));
 

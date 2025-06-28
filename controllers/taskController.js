@@ -1,8 +1,8 @@
 // --- START OF FILE atu-mining-api/controllers/taskController.js (VERSIÓN CORREGIDA Y UNIFICADA) ---
 
-const User = require('../models/User.js');
-const Transaction = require('../models/Transaction.js');
-const TASKS = require('../config/tasks.js');
+const User = require('../models/User');
+const Transaction = require('../models/Transaction');
+const TASKS = require('../config/tasks');
 
 const GROUP_CHAT_ID = process.env.GROUP_CHAT_ID;
 

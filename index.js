@@ -1,17 +1,18 @@
-import 'dotenv/config';
-import express from 'express';
-import mongoose from 'mongoose';
-import cors from 'cors';
-import { Telegraf } from 'telegraf';
+require('dotenv').config();
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const { Telegraf } = require('telegraf');
 
-// --- IMPORTACIÓN DE RUTAS, SERVICIOS Y MODELOS (Sintaxis ESM) ---
-import userRoutes from './routes/userRoutes.js';
-import boostRoutes from './routes/boostRoutes.js';
-import taskRoutes from './routes/taskRoutes.js';
-import referralRoutes from './routes/referralRoutes.js';
-import paymentRoutes from './routes/paymentRoutes.js';
-import * as boostService from './services/boost.service.js';
-import User from './models/User.js';
+// --- IMPORTACIÓN DE RUTAS, SERVICIOS Y MODELOS (Sintaxis CommonJS) ---
+// NOTA: SIN la extensión .js al final
+const userRoutes = require('./routes/userRoutes');
+const boostRoutes = require('./routes/boostRoutes');
+const taskRoutes = require('./routes/taskRoutes');
+const referralRoutes = require('./routes/referralRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
+const boostService = require('./services/boost.service');
+const User = require('./models/User');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
