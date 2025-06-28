@@ -1,4 +1,4 @@
-// --- START OF FILE atu-mining-api/routes/index.js (VERSIÓN DEFINITIVA) ---
+// --- START OF FILE atu-mining-api/routes/index.js (FINAL) ---
 
 const express = require('express');
 const router = express.Router();
@@ -16,18 +16,18 @@ const withdrawalRoutes = require('./withdrawalRoutes');
 const leaderboardRoutes = require('./leaderboardRoutes');
 
 
-// Montar cada ruta en el enrutador principal CON EL PREFIJO '/api'
-router.use('/api/admin', adminRoutes);
-router.use('/api/users', userRoutes);
-router.use('/api/boosts', boostRoutes);
-router.use('/api/mining', miningRoutes);
-router.use('/api/exchange', exchangeRoutes);
-router.use('/api/payments', paymentRoutes);
-router.use('/api/tasks', taskRoutes);
-router.use('/api/transactions', transactionRoutes);
-router.use('/api/withdrawals', withdrawalRoutes);
-router.use('/api/leaderboard', leaderboardRoutes);
+// Montar cada ruta SIN prefijo aquí.
+router.use('/admin', adminRoutes);
+router.use('/users', userRoutes);
+router.use('/boosts', boostRoutes);
+router.use('/mining', miningRoutes);
+router.use('/exchange', exchangeRoutes);
+router.use('/payments', paymentRoutes);
+router.use('/tasks', taskRoutes);
+router.use('/transactions', transactionRoutes);
+router.use('/withdrawals', withdrawalRoutes);
+router.use('/leaderboard', leaderboardRoutes);
 
-// Exportar el enrutador principal que contiene todas las rutas ya prefijadas
+// Exportar el enrutador principal
 module.exports = router;
-// --- END OF FILE atu-mining-api/routes/index.js (VERSIÓN DEFINITIVA) ---
+// --- END OF FILE atu-mining-api/routes/index.js (FINAL) ---
