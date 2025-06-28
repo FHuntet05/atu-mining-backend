@@ -1,12 +1,13 @@
-// --- START OF FILE atu-mining-api/index.js (LA SOLUCIÓN FINAL) ---
+// --- START OF FILE atu-mining-api/index.js (CON DIAGNÓSTICO) ---
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const { Telegraf } = require('telegraf');
 
-// --- 1. IMPORTAMOS LOS CONTROLADORES Y RUTAS INDIVIDUALES ---
-const userController = require('./controllers/userController'); // Importamos el controlador directamente
+// --- 1. IMPORTAMOS ---
+console.log('➡️ [INDEX] 1. Cargando dependencias y rutas...');
+const userController = require('./controllers/userController');
 const userRoutes = require('./routes/userRoutes');
 const boostRoutes = require('./routes/boostRoutes');
 const miningRoutes = require('./routes/miningRoutes');
@@ -15,16 +16,17 @@ const paymentRoutes = require('./routes/paymentRoutes');
 const taskRoutes = require('./routes/taskRoutes');
 const transactionRoutes = require('./routes/transactionRoutes');
 const withdrawalRoutes = require('./routes/withdrawalRoutes');
+const referralRoutes = require('./routes/referralRoutes'); // <-- Importamos el archivo
 const leaderboardRoutes = require('./routes/leaderboardRoutes');
 const { startCheckingTransactions } = require('./services/transaction.service');
+console.log('✅ [INDEX] 1b. Todas las rutas cargadas en memoria.');
 
-// --- 2. CONFIGURACIÓN INICIAL DEL BOT Y EXPRESS ---
 if (!process.env.TELEGRAM_BOT_TOKEN) throw new Error('TELEGRAM_BOT_TOKEN debe estar definido en .env');
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 const app = express();
 app.set('bot', bot);
 
-// --- 3. MIDDLEWARE ---
+// --- 2. MIDDLEWARE ---
 const corsOptions = {
     origin: function (origin, callback) {
         if (!origin || origin.endsWith('.onrender.com') || origin.startsWith('https://web.telegram.org')) {
@@ -38,25 +40,17 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
-// --- 4. CONEXIÓN A BASE DE DATOS E INICIO DE SERVICIOS ---
+// --- 3. DB & SERVICES ---
 mongoose.connect(process.env.DATABASE_URL)
     .then(() => {
-        console.log('✅ API: Conectado a MongoDB.');
+        console.log('✅ [INDEX] 2. Conectado a MongoDB.');
         startCheckingTransactions(bot);
     })
-    .catch(err => console.error('❌ API: Error de conexión a MongoDB:', err));
+    .catch(err => console.error('❌ [INDEX] Error de conexión a MongoDB:', err));
 
-// =================================================================
-// =============== INICIO DE LA ARQUITECTURA FINAL =================
-// =================================================================
-
-// 5. REGISTRAMOS CADA RUTA CON SU PREFIJO COMPLETO DIRECTAMENTE EN LA APP.
-//    Esto es explícito y elimina cualquier punto de fallo del enrutador.
-
-// Ruta problemática definida DIRECTAMENTE aquí:
+// --- 4. REGISTRO DE RUTAS ---
+console.log('➡️ [INDEX] 3. Registrando endpoints de la API...');
 app.post('/api/users/sync', userController.syncUser);
-
-// Resto de las rutas:
 app.use('/api/users', userRoutes);
 app.use('/api/boosts', boostRoutes);
 app.use('/api/mining', miningRoutes);
@@ -66,26 +60,20 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/withdrawals', withdrawalRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
+// AÑADIMOS UN LOG ESPECÍFICO PARA LA RUTA PROBLEMÁTICA
+app.use('/api/referrals', referralRoutes);
+console.log("✅ [INDEX] 3b. Endpoint '/api/referrals' registrado.");
 
-// =================================================================
-// ================= FIN DE LA ARQUITECTURA FINAL ==================
-// =================================================================
-
-// --- 6. CONFIGURACIÓN DEL WEBHOOK Y LANZAMIENTO DEL SERVIDOR ---
+// --- 5. WEBHOOK & SERVER LAUNCH ---
 const secretPath = `/telegraf/${bot.secret}`;
 bot.telegram.setWebhook(`${process.env.WEBHOOK_URL}${secretPath}`);
 app.use(bot.webhookCallback(secretPath));
 bot.start((ctx) => ctx.reply('Bienvenido a ATU Mining.'));
+// bot.launch() no se usa con webhooks de esta manera
 
-app.get('/', (req, res) => {
-    res.send('ATU Mining API está en línea y funcionando. OK.');
-});
-
+app.get('/', (req, res) => res.send('ATU Mining API está en línea. OK.'));
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`✅ API: Servidor escuchando en el puerto ${PORT}`);
-    console.log(`🤖 Bot configurado para recibir updates en: ${secretPath}`);
+    console.log(`✅ [INDEX] 4. Servidor Express escuchando en el puerto ${PORT}`);
 });
-
-// NO se usa bot.launch() en producción con webhooks
-// --- END OF FILE atu-mining-api/index.js (LA SOLUCIÓN FINAL) ---
+// --- END OF FILE atu-mining-api/index.js (CON DIAGNÓSTICO) ---
