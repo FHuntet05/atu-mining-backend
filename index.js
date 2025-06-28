@@ -1,12 +1,11 @@
-// --- START OF FILE atu-mining-api/index.js (CON DIAGNÓSTICO) ---
+// --- START OF FILE atu-mining-api/index.js (FINAL Y LIMPIO) ---
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const { Telegraf } = require('telegraf');
 
-// --- 1. IMPORTAMOS ---
-console.log('➡️ [INDEX] 1. Cargando dependencias y rutas...');
+// --- 1. IMPORTAMOS RUTAS Y SERVICIOS ---
 const userController = require('./controllers/userController');
 const userRoutes = require('./routes/userRoutes');
 const boostRoutes = require('./routes/boostRoutes');
@@ -16,10 +15,9 @@ const paymentRoutes = require('./routes/paymentRoutes');
 const taskRoutes = require('./routes/taskRoutes');
 const transactionRoutes = require('./routes/transactionRoutes');
 const withdrawalRoutes = require('./routes/withdrawalRoutes');
-const referralRoutes = require('./routes/referralRoutes'); // <-- Importamos el archivo
+const referralRoutes = require('./routes/referralRoutes');
 const leaderboardRoutes = require('./routes/leaderboardRoutes');
 const { startCheckingTransactions } = require('./services/transaction.service');
-console.log('✅ [INDEX] 1b. Todas las rutas cargadas en memoria.');
 
 if (!process.env.TELEGRAM_BOT_TOKEN) throw new Error('TELEGRAM_BOT_TOKEN debe estar definido en .env');
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
@@ -40,16 +38,15 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
-// --- 3. DB & SERVICES ---
+// --- 3. CONEXIÓN A DB Y SERVICIOS ---
 mongoose.connect(process.env.DATABASE_URL)
     .then(() => {
-        console.log('✅ [INDEX] 2. Conectado a MongoDB.');
+        console.log('✅ API: Conectado a MongoDB.');
         startCheckingTransactions(bot);
     })
-    .catch(err => console.error('❌ [INDEX] Error de conexión a MongoDB:', err));
+    .catch(err => console.error('❌ API: Error de conexión a MongoDB:', err));
 
 // --- 4. REGISTRO DE RUTAS ---
-console.log('➡️ [INDEX] 3. Registrando endpoints de la API...');
 app.post('/api/users/sync', userController.syncUser);
 app.use('/api/users', userRoutes);
 app.use('/api/boosts', boostRoutes);
@@ -60,20 +57,19 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/withdrawals', withdrawalRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
-// AÑADIMOS UN LOG ESPECÍFICO PARA LA RUTA PROBLEMÁTICA
-app.use('/api/referrals', referralRoutes);
-console.log("✅ [INDEX] 3b. Endpoint '/api/referrals' registrado.");
+app.use('/api/referrals', referralRoutes); // Registramos la ruta de referidos
 
-// --- 5. WEBHOOK & SERVER LAUNCH ---
+// --- 5. WEBHOOK Y LANZAMIENTO DEL SERVIDOR ---
 const secretPath = `/telegraf/${bot.secret}`;
 bot.telegram.setWebhook(`${process.env.WEBHOOK_URL}${secretPath}`);
 app.use(bot.webhookCallback(secretPath));
 bot.start((ctx) => ctx.reply('Bienvenido a ATU Mining.'));
-// bot.launch() no se usa con webhooks de esta manera
 
 app.get('/', (req, res) => res.send('ATU Mining API está en línea. OK.'));
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`✅ [INDEX] 4. Servidor Express escuchando en el puerto ${PORT}`);
+    console.log(`✅ API: Servidor escuchando en el puerto ${PORT}`);
 });
-// --- END OF FILE atu-mining-api/index.js (CON DIAGNÓSTICO) ---
+
+// No se usa bot.launch() en producción con webhooks
+// --- END OF FILE atu-mining-api/index.js (FINAL Y LIMPIO) ---
