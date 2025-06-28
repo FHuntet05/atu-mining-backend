@@ -1,22 +1,18 @@
+// --- START OF FILE atu-mining-backend/routes/withdrawalRoutes.js ---
+
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
+const ECONOMY_CONFIG = require('../config/economy');
 const { Telegraf } = require('telegraf');
 
-// Verificamos que las variables de entorno para el bot de admin existan.
 if (!process.env.ADMIN_BOT_TOKEN || !process.env.ADMIN_IDS) {
-    console.warn("ADVERTENCIA: Las variables de entorno ADMIN_BOT_TOKEN y/o ADMIN_IDS no están configuradas. Las notificaciones de retiro al bot de admin no funcionarán.");
+    console.warn("ADVERTENCIA: Variables de admin no configuradas.");
 }
-
-// Creamos una instancia de Telegraf SOLO para enviar mensajes.
-// Es importante no llamar a .launch() ni configurar webhooks aquí para no crear conflictos.
 const adminBot = new Telegraf(process.env.ADMIN_BOT_TOKEN);
 
-
-// Ruta: POST /api/withdrawal/request
-// Procesa una nueva solicitud de retiro de un usuario.
 router.post('/request', async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -45,7 +41,7 @@ router.post('/request', async (req, res) => {
 
         // --- 2. Validaciones de Negocio ---
         // Verificar si el usuario tiene suficiente saldo retirable
-        if (user.usdtForWithdrawal < withdrawalAmount) {
+         if (user.usdtBalance < withdrawalAmount) {
             await session.abortTransaction();
             return res.status(400).json({ message: 'Fondos insuficientes para realizar este retiro.' });
         }
@@ -62,7 +58,7 @@ router.post('/request', async (req, res) => {
         
         // --- 3. Procesamiento de la Solicitud (Transacción Atómica) ---
         // Descontamos el saldo del usuario y actualizamos la fecha de solicitud
-        user.usdtForWithdrawal -= withdrawalAmount;
+        user.usdtBalance -= withdrawalAmount; // Se resta del único usdtBalance
         user.lastWithdrawalRequest = new Date();
         const updatedUser = await user.save({ session });
 

@@ -1,45 +1,41 @@
 // --- START OF FILE atu-mining-backend/controllers/userController.js ---
 
 const User = require('../models/User');
-const ECONOMY_CONFIG = require('../config/economy'); // <-- 1. IMPORTAMOS LA CONFIGURACIÓN
+const ECONOMY_CONFIG = require('../config/economy');
 
 const syncUser = async (req, res) => {
     try {
-        const tgUserDataFromFrontend = req.body;
-        if (!tgUserDataFromFrontend.telegramId) {
+        const tgUserData = req.body;
+        if (!tgUserData?.telegramId) {
             return res.status(400).json({ message: 'Telegram ID es requerido.' });
         }
         
-        const formattedTgUser = {
-            id: tgUserDataFromFrontend.telegramId,
-            first_name: tgUserDataFromFrontend.firstName,
-            username: tgUserDataFromFrontend.username,
-            photo_url: tgUserDataFromFrontend.photoUrl,
-        };
-
-        const user = await User.findOrCreate(formattedTgUser);
+        let user = await User.findOrCreate({
+            id: tgUserData.telegramId,
+            first_name: tgUserData.firstName,
+            username: tgUserData.username,
+            photo_url: tgUserData.photoUrl,
+        });
         
-        user.firstName = formattedTgUser.first_name || user.firstName;
-        user.username = formattedTgUser.username || user.username;
-        user.photoUrl = formattedTgUser.photo_url || user.photoUrl;
+        user.firstName = tgUserData.firstName || user.firstName;
+        user.username = tgUserData.username || user.username;
+        user.photoUrl = tgUserData.photoUrl || user.photoUrl;
+
+        let showWelcome = false;
+        if (!user.hasSeenWelcome) {
+            showWelcome = true;
+            user.hasSeenWelcome = true; 
+        }
+
         await user.save();
         
-        const populatedUser = await User.findById(user._id).populate({
-            path: 'referrals', select: 'firstName photoUrl'
-        });
-
-        // --- INICIO DE LA MODIFICACIÓN CLAVE ---
-
-        // 2. Convertimos el documento de Mongoose a un objeto plano
+        const populatedUser = await User.findById(user._id).populate({ path: 'referrals', select: 'firstName photoUrl' });
         const userObject = populatedUser.toObject();
-
-        // 3. Adjuntamos la configuración de la economía al objeto del usuario
-        userObject.config = ECONOMY_CONFIG;
-
-        // 4. Enviamos el objeto combinado al frontend
+        
+        userObject.config = ECONOMY_CONFIG; // Adjunta config económica
+        userObject.showWelcomeModal = showWelcome; // Adjunta el flag de bienvenida
+        
         res.status(200).json(userObject);
-
-        // --- FIN DE LA MODIFICACIÓN CLAVE ---
 
     } catch (error) {
         console.error('Error en syncUser:', error);
@@ -50,15 +46,14 @@ const syncUser = async (req, res) => {
 const getUserData = async (req, res) => {
     try {
         const { telegramId } = req.params;
-        const user = await User.findOne({ telegramId: parseInt(telegramId, 10) }).populate({
-            path: 'referrals', select: 'firstName photoUrl autBalance'
-        });
+        const user = await User.findOne({ telegramId: parseInt(telegramId, 10) })
+                                 .populate({ path: 'referrals', select: 'firstName photoUrl autBalance' });
+
         if (!user) return res.status(404).json({ message: 'Usuario no encontrado' });
         
-        // También podemos añadir la config aquí por consistencia si fuera necesario
         const userObject = user.toObject();
         userObject.config = ECONOMY_CONFIG;
-
+        
         res.status(200).json(userObject);
     } catch (error) {
         console.error('Error en getUserData:', error);
@@ -67,4 +62,5 @@ const getUserData = async (req, res) => {
 };
 
 module.exports = { syncUser, getUserData };
+
 // --- END OF FILE atu-mining-backend/controllers/userController.js ---

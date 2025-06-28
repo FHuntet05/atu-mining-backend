@@ -7,24 +7,27 @@ const userSchema = new mongoose.Schema({
     firstName: { type: String, required: true },
     username: { type: String, required: false },
     photoUrl: { type: String, required: false },
-    autBalance: { type: Number, default: 0 },
-    usdtBalance: { type: Number, default: 0 },
-    usdtForWithdrawal: { type: Number, default: 0 },
-    lastClaim: { type: Date, default: Date.now },
     
-    boostYieldPerHour: { type: Number, default: 0 }, // <-- CAMPO AÑADIDO: para el cálculo de minería
+    // Balances
+    autBalance: { type: Number, default: 0 },
+    usdtBalance: { type: Number, default: 0 }, // SALDO ÚNICO
+    
+    // Minería y Boosts
+    lastClaim: { type: Date, default: Date.now },
+    boostYieldPerHour: { type: Number, default: 0 },
     activeBoosts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'ActiveBoost' }],
+    totalMinedAUT: { type: Number, default: 0, index: true },
 
-    storageCapacity: { type: Number, default: (350 / 24) * 8 },
+    // Referidos
     referrerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     referrals: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-    lastWithdrawalRequest: { type: Date, default: null },
-    hasMadeDeposit: { type: Boolean, default: false },
     referralEarnings: { type: Number, default: 0 },
-    
-    totalMinedAUT: { type: Number, default: 0, index: true }, // <-- CAMPO AÑADIDO: para el leaderboard
-    
-    completedTasks: [{ type: String }]
+
+    // Metadata y Tareas
+    lastWithdrawalRequest: { type: Date, default: null },
+    completedTasks: [{ type: String }],
+    hasSeenWelcome: { type: Boolean, default: false }, // NUEVO FLAG
+
 }, { timestamps: true });
 
 userSchema.statics.findOrCreate = async function(tgUser) {
