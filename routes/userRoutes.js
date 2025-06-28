@@ -1,13 +1,11 @@
-import express from 'express';
-import * as userController from '../controllers/userController';
-
+const express = require('express');
 const router = express.Router();
 
-// Esta ruta para obtener los datos de un usuario por su ID se mantiene.
-// El archivo principal la montará en la ruta completa: /api/users/data/:telegramId
+// Usamos require para importar el controlador
+const userController = require('../controllers/userController');
+
+// Definimos la ruta que necesita el frontend
 router.get('/data/:telegramId', userController.getUserData);
 
-// NOTA: Si necesitas otras rutas de usuario, como /sync, añádelas aquí.
-// Ejemplo: router.post('/sync', userController.syncUser);
-
-export default router;
+// Exportamos el router con la sintaxis antigua
+module.exports = router;
