@@ -1,4 +1,7 @@
+// --- START OF FILE atu-mining-backend/controllers/userController.js ---
+
 const User = require('../models/User');
+const ECONOMY_CONFIG = require('../config/economy'); // <-- 1. IMPORTAMOS LA CONFIGURACIÓN
 
 const syncUser = async (req, res) => {
     try {
@@ -24,8 +27,19 @@ const syncUser = async (req, res) => {
         const populatedUser = await User.findById(user._id).populate({
             path: 'referrals', select: 'firstName photoUrl'
         });
-        
-        res.status(200).json(populatedUser);
+
+        // --- INICIO DE LA MODIFICACIÓN CLAVE ---
+
+        // 2. Convertimos el documento de Mongoose a un objeto plano
+        const userObject = populatedUser.toObject();
+
+        // 3. Adjuntamos la configuración de la economía al objeto del usuario
+        userObject.config = ECONOMY_CONFIG;
+
+        // 4. Enviamos el objeto combinado al frontend
+        res.status(200).json(userObject);
+
+        // --- FIN DE LA MODIFICACIÓN CLAVE ---
 
     } catch (error) {
         console.error('Error en syncUser:', error);
@@ -40,7 +54,12 @@ const getUserData = async (req, res) => {
             path: 'referrals', select: 'firstName photoUrl autBalance'
         });
         if (!user) return res.status(404).json({ message: 'Usuario no encontrado' });
-        res.status(200).json(user);
+        
+        // También podemos añadir la config aquí por consistencia si fuera necesario
+        const userObject = user.toObject();
+        userObject.config = ECONOMY_CONFIG;
+
+        res.status(200).json(userObject);
     } catch (error) {
         console.error('Error en getUserData:', error);
         res.status(500).json({ message: 'Error interno del servidor.' });
@@ -48,3 +67,4 @@ const getUserData = async (req, res) => {
 };
 
 module.exports = { syncUser, getUserData };
+// --- END OF FILE atu-mining-backend/controllers/userController.js ---

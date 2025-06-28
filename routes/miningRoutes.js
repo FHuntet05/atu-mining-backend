@@ -1,9 +1,12 @@
+// --- START OF FILE atu-mining-backend/routes/miningRoutes.js ---
+
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 
 const ENERGY_CAPACITY_HOURS = 8;
+const BASE_YIELD_PER_HOUR = 350 / 24;
 
 router.post('/claim', async (req, res) => {
     try {
@@ -19,12 +22,12 @@ router.post('/claim', async (req, res) => {
             return res.status(400).json({ message: 'Debes esperar un poco más para reclamar.' });
         }
         
-        const totalYieldPerHour = (350 / 24) + user.boostYieldPerHour;
+        const totalYieldPerHour = BASE_YIELD_PER_HOUR + (user.boostYieldPerHour || 0);
         const earnedAmount = (accruedTime / (1000 * 60 * 60)) * totalYieldPerHour;
         
         // --- INICIO DE CORRECCIÓN ---
-        const oldBalance = user.autBalance;
         user.autBalance += earnedAmount;
+        user.totalMinedAUT = (user.totalMinedAUT || 0) + earnedAmount; // <-- CORRECCIÓN: Se actualiza el total para el leaderboard
         user.lastClaim = new Date();
         
         // Creamos la transacción correctamente
@@ -32,7 +35,7 @@ router.post('/claim', async (req, res) => {
             userId: user._id,
             type: 'claim_mining',
             currency: 'AUT',
-            amount: earnedAmount, // Es un número
+            amount: earnedAmount,
             status: 'completed',
             details: 'Reclamo de minería'
         });
@@ -51,3 +54,4 @@ router.post('/claim', async (req, res) => {
 });
 
 module.exports = router;
+// --- END OF FILE atu-mining-backend/routes/miningRoutes.js ---

@@ -1,7 +1,10 @@
+// --- START OF FILE atu-mining-backend/controllers/boostController.js ---
+
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
-const BOOSTS_CONFIG = require('../config/tasks'); // Asumiendo que tus boosts están en un archivo de config
+const ActiveBoost = require('../models/ActiveBoost'); // <-- CORRECCIÓN: Modelo importado
+const BOOSTS_CONFIG = require('../config/boosts'); // <-- CORRECCIÓN: Importación correcta
 
 exports.purchaseWithBalance = async (req, res) => {
     const session = await mongoose.startSession();
@@ -34,20 +37,16 @@ exports.purchaseWithBalance = async (req, res) => {
             return res.status(400).json({ message: "Saldo de depósito insuficiente." });
         }
 
-        // --- Aplicamos los cambios al usuario ---
-        user.usdtBalance -= totalCost;
-        const yieldIncreasePerHour = (boostToBuy.dailyYield / 24) * purchaseQuantity;
-        user.boostYieldPerHour += yieldIncreasePerHour;
-        
-       // --- LÓGICA DE COMPRA REDISEÑADA ---
+        // --- LÓGICA DE COMPRA CORREGIDA ---
         user.usdtBalance -= totalCost;
         
         // Creamos N documentos de ActiveBoost, uno por cada unidad comprada
         const boostsToCreate = [];
         const expirationDate = new Date(Date.now() + boostToBuy.duration * 24 * 60 * 60 * 1000);
-        const yieldIncrease = boostToBuy.dailyYield / 24;
+        // El yieldIncrease ya está calculado por hora en el config
+        const yieldIncrease = boostToBuy.yieldIncrease; 
 
-        for (let i = 0; i < quantity; i++) {
+        for (let i = 0; i < purchaseQuantity; i++) {
             boostsToCreate.push({
                 userId: user._id,
                 boostId: boostToBuy.id,
@@ -56,10 +55,17 @@ exports.purchaseWithBalance = async (req, res) => {
             });
         }
         
+        // Usamos el modelo ActiveBoost que ahora sí está definido
         const createdBoosts = await ActiveBoost.insertMany(boostsToCreate, { session });
         
         // Añadimos las referencias de los nuevos boosts al usuario
         user.activeBoosts.push(...createdBoosts.map(b => b._id));
+        
+        // Actualizamos el rendimiento total por hora del usuario
+        // Este campo debe existir en el modelo User.js, si no, hay que añadirlo.
+        // Asumiré que se llama boostYieldPerHour como en miningRoutes.js
+        user.boostYieldPerHour = (user.boostYieldPerHour || 0) + (yieldIncrease * purchaseQuantity);
+
 
         await Transaction.create([{
             userId: user._id, type: 'purchase', currency: 'USDT',
@@ -67,7 +73,11 @@ exports.purchaseWithBalance = async (req, res) => {
             details: `Compra de ${purchaseQuantity}x ${boostToBuy.title} con saldo`
         }], { session });
 
-       const updatedUser = await User.findById(user._id).populate('activeBoosts');
+        await user.save({ session });
+        await session.commitTransaction();
+
+        // Poblamos los activeBoosts para devolver la información completa al frontend
+        const updatedUser = await User.findById(user._id).populate('activeBoosts');
         res.status(200).json({ message: '¡Compra exitosa!', user: updatedUser });
 
     } catch (error) {
@@ -87,3 +97,4 @@ exports.getBoosts = async (req, res) => {
         res.status(500).json({ message: 'Error al obtener la lista de boosts.' });
     }
 };
+// --- END OF FILE atu-mining-backend/controllers/boostController.js ---
