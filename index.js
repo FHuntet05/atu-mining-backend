@@ -1,11 +1,11 @@
-// --- START OF FILE atu-mining-api/index.js (FINAL Y LIMPIO) ---
+// --- START OF FILE atu-mining-api/index.js (VERSIÓN FINAL Y ROBUSTA) ---
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
-const { Telegraf , Markup } = require('telegraf');
+const { Telegraf } = require('telegraf');
 
-// --- 1. IMPORTAMOS RUTAS Y SERVICIOS ---
+// --- 1. IMPORTACIONES ---
 const userController = require('./controllers/userController');
 const userRoutes = require('./routes/userRoutes');
 const boostRoutes = require('./routes/boostRoutes');
@@ -15,16 +15,24 @@ const paymentRoutes = require('./routes/paymentRoutes');
 const taskRoutes = require('./routes/taskRoutes');
 const transactionRoutes = require('./routes/transactionRoutes');
 const withdrawalRoutes = require('./routes/withdrawalRoutes');
-const referralRoutes = require('./routes/referralRoutes');
 const leaderboardRoutes = require('./routes/leaderboardRoutes');
+const referralRoutes = require('./routes/referralRoutes');
 const { startCheckingTransactions } = require('./services/transaction.service');
+const { grantBoostsToUser } = require('./services/boost.service');
+const BOOSTS_CONFIG = require('./config/boosts');
+const Transaction = require('./models/Transaction');
+const User = require('./models/User');
 
-if (!process.env.TELEGRAM_BOT_TOKEN) throw new Error('TELEGRAM_BOT_TOKEN debe estar definido en .env');
+// --- 2. CONFIGURACIÓN INICIAL ---
+if (!process.env.TELEGRAM_BOT_TOKEN) throw new Error('TELEGRAM_BOT_TOKEN debe estar definido');
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 const app = express();
 app.set('bot', bot);
 
-// --- 2. MIDDLEWARE ---
+// Se define UNA SOLA VEZ y de forma global en este archivo.
+const ADMIN_IDS = (process.env.ADMIN_IDS || '').split(',').map(id => parseInt(id.trim(), 10));
+
+// --- 3. MIDDLEWARE ---
 const corsOptions = {
     origin: function (origin, callback) {
         if (!origin || origin.endsWith('.onrender.com') || origin.startsWith('https://web.telegram.org')) {
@@ -38,7 +46,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
-// --- 3. CONEXIÓN A DB Y SERVICIOS ---
+// --- 4. CONEXIÓN A DB ---
 mongoose.connect(process.env.DATABASE_URL)
     .then(() => {
         console.log('✅ API: Conectado a MongoDB.');
@@ -46,7 +54,7 @@ mongoose.connect(process.env.DATABASE_URL)
     })
     .catch(err => console.error('❌ API: Error de conexión a MongoDB:', err));
 
-// --- 4. REGISTRO DE RUTAS ---
+// --- 5. REGISTRO DE RUTAS API ---
 app.post('/api/users/sync', userController.syncUser);
 app.use('/api/users', userRoutes);
 app.use('/api/boosts', boostRoutes);
@@ -57,7 +65,8 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/withdrawals', withdrawalRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
-app.use('/api/referrals', referralRoutes); // Registramos la ruta de referidos
+app.use('/api/referral', referralRoutes);
+
 bot.start((ctx) => {
     // URL de una imagen de bienvenida. Puedes crear una y subirla a un host como Imgur o Postimages.
     const welcomeImageUrl = 'https://postimg.cc/hQtL6wsT'; // URL de ejemplo, ¡cámbiala!
@@ -144,10 +153,11 @@ bot.command('addboost', async (ctx) => {
 });
 
 // --- 5. WEBHOOK Y LANZAMIENTO DEL SERVIDOR ---
-const secretPath = `/telegraf/${bot.secret}`;
-bot.telegram.setWebhook(`${process.env.WEBHOOK_URL}${secretPath}`);
-app.use(bot.webhookCallback(secretPath));
+// 1. Define el path secreto donde la app escuchará.
+const secretPath = `/telegraf/${bot.token}`; // Usar el token completo es más seguro
 
+// 2. Usa el middleware para que Telegraf procese los mensajes que lleguen a esa ruta.
+app.use(bot.webhookCallback(secretPath));
 
 app.get('/', (req, res) => res.send('ATU Mining API está en línea. OK.'));
 const PORT = process.env.PORT || 3000;
