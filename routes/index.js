@@ -1,32 +1,33 @@
+// --- START OF FILE atu-mining-api/routes/index.js (VERSIÓN DEFINITIVA) ---
+
 const express = require('express');
 const router = express.Router();
 
 // Importar todas las rutas individuales
+const adminRoutes = require('./adminRoutes');
 const userRoutes = require('./userRoutes');
 const boostRoutes = require('./boostRoutes');
 const miningRoutes = require('./miningRoutes');
 const exchangeRoutes = require('./exchangeRoutes');
 const paymentRoutes = require('./paymentRoutes');
-const referralRoutes = require('./referralRoutes');
-const taskRoutes = require('./taskRoutes'); // Esta línea ya es correcta y usará el nuevo archivo.
+const taskRoutes = require('./taskRoutes');
 const transactionRoutes = require('./transactionRoutes');
 const withdrawalRoutes = require('./withdrawalRoutes');
 const leaderboardRoutes = require('./leaderboardRoutes');
-const adminRoutes = require('./adminRoutes'); 
 
-// Montar cada ruta en el enrutador principal
-router.use('/users', userRoutes);
-router.use('/boosts', boostRoutes);
-router.use('/mining', miningRoutes);
-router.use('/exchange', exchangeRoutes);
-router.use('/payments', paymentRoutes);
-router.use('/referrals', referralRoutes);
-router.use('/tasks', taskRoutes); // Esta línea ya es correcta.
-router.use('/transactions', transactionRoutes);
-router.use('/withdrawals', withdrawalRoutes);
-router.use('/leaderboard', leaderboardRoutes);
-router.use('/boosts', require('./boostRoutes'));
-router.use('/admin', adminRoutes);
 
-// Exportar el enrutador principal que contiene todas las rutas
+// Montar cada ruta en el enrutador principal CON EL PREFIJO '/api'
+router.use('/api/admin', adminRoutes);
+router.use('/api/users', userRoutes);
+router.use('/api/boosts', boostRoutes);
+router.use('/api/mining', miningRoutes);
+router.use('/api/exchange', exchangeRoutes);
+router.use('/api/payments', paymentRoutes);
+router.use('/api/tasks', taskRoutes);
+router.use('/api/transactions', transactionRoutes);
+router.use('/api/withdrawals', withdrawalRoutes);
+router.use('/api/leaderboard', leaderboardRoutes);
+
+// Exportar el enrutador principal que contiene todas las rutas ya prefijadas
 module.exports = router;
+// --- END OF FILE atu-mining-api/routes/index.js (VERSIÓN DEFINITIVA) ---
