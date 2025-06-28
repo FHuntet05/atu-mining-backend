@@ -1,9 +1,8 @@
-// --- START OF FILE atu-mining-api/routes/referralRoutes.js (VERSIÓN FINAL VERIFICADA) ---
+// --- START OF FILE atu-mining-api/routes/referralRoutes.js (FINAL Y VERIFICADO) ---
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 
-// Estas son solo constantes para mostrar en el frontend, no afectan la lógica de comisiones real.
 const COMMISSIONS = { level1: 0.27, level2: 0.17, level3: 0.07 };
 
 // La ruta es GET /:telegramId
@@ -14,21 +13,17 @@ router.get('/:telegramId', async (req, res) => {
             return res.status(400).json({ message: 'Telegram ID inválido o requerido.' });
         }
         
-        // Usamos populate para traer los referidos directos
         const user = await User.findOne({ telegramId: parseInt(telegramId, 10) }).populate('referrals');
 
         if (!user) {
             return res.status(404).json({ message: 'Usuario no encontrado.' });
         }
 
-        // Nivel 1: Son los que ya hemos traído con populate.
         const level1UsersCount = user.referrals.length;
         
-        // Nivel 2: Contamos los usuarios cuyo 'referrerId' es uno de nuestros referidos de nivel 1.
         const level1UserIds = user.referrals.map(ref => ref._id);
         const level2UsersCount = await User.countDocuments({ referrerId: { $in: level1UserIds } });
         
-        // Nivel 3: Contamos los usuarios cuyo 'referrerId' es uno de nuestros referidos de nivel 2.
         const level2UserDocs = await User.find({ referrerId: { $in: level1UserIds } }).select('_id');
         const level2UserIds = level2UserDocs.map(u => u._id);
         const level3UsersCount = await User.countDocuments({ referrerId: { $in: level2UserIds } });
@@ -51,4 +46,4 @@ router.get('/:telegramId', async (req, res) => {
 });
 
 module.exports = router;
-// --- END OF FILE atu-mining-api/routes/referralRoutes.js (VERSIÓN FINAL VERIFICADA) ---
+// --- END OF FILE atu-mining-api/routes/referralRoutes.js (FINAL Y VERIFICADO) ---
