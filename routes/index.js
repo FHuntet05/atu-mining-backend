@@ -12,6 +12,7 @@ const taskRoutes = require('./taskRoutes'); // Esta línea ya es correcta y usar
 const transactionRoutes = require('./transactionRoutes');
 const withdrawalRoutes = require('./withdrawalRoutes');
 const leaderboardRoutes = require('./leaderboardRoutes');
+const adminRoutes = require('./adminRoutes'); 
 
 // Montar cada ruta en el enrutador principal
 router.use('/users', userRoutes);
@@ -25,6 +26,7 @@ router.use('/transactions', transactionRoutes);
 router.use('/withdrawals', withdrawalRoutes);
 router.use('/leaderboard', leaderboardRoutes);
 router.use('/boosts', require('./boostRoutes'));
+router.use('/admin', adminRoutes);
 
 // Exportar el enrutador principal que contiene todas las rutas
 module.exports = router;
