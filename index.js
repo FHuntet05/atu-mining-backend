@@ -5,7 +5,6 @@ const cors = require('cors');
 const { Telegraf } = require('telegraf');
 
 // --- IMPORTACIÓN DE RUTAS, SERVICIOS Y MODELOS (Sintaxis CommonJS) ---
-// NOTA: SIN la extensión .js al final
 const userRoutes = require('./routes/userRoutes');
 const boostRoutes = require('./routes/boostRoutes');
 const taskRoutes = require('./routes/taskRoutes');
@@ -53,7 +52,7 @@ app.use('/api/payments', paymentRoutes);
 
 
 // =================================================================
-// =========== LÓGICA DEL BOT DE TELEGRAM ==========================
+// =========== LÓGICA DEL BOT DE TELEGRAM (VERSIÓN FINAL ROBUSTA) =============
 // =================================================================
 
 if (process.env.TELEGRAM_BOT_TOKEN && process.env.RENDER_EXTERNAL_URL && process.env.TELEGRAM_SECRET_TOKEN) {
@@ -105,6 +104,7 @@ if (process.env.TELEGRAM_BOT_TOKEN && process.env.RENDER_EXTERNAL_URL && process
             if (!targetUser) {
                 return ctx.reply(`❌ Error: No se encontró un usuario con el ID de Telegram ${targetUserId}.`);
             }
+            // Asumo que el servicio existe y la función se llama así
             await boostService.addBoostToUser(targetUser._id, boostId, quantity);
             ctx.reply(`✅ ¡Éxito! Se añadieron ${quantity} boost(s) de tipo "${boostId}" al usuario con ID de Telegram ${targetUserId}.`);
         } catch (error) {
@@ -113,24 +113,28 @@ if (process.env.TELEGRAM_BOT_TOKEN && process.env.RENDER_EXTERNAL_URL && process
         }
     });
 
-    // --- CONFIGURACIÓN DEL WEBHOOK ---
-    const startWebhook = async () => {
-        try {
-            const secretPath = `/telegraf/${bot.secretPathComponent()}`;
-            app.use(await bot.createWebhook({ 
-                domain: process.env.RENDER_EXTERNAL_URL,
-                secret_token: process.env.TELEGRAM_SECRET_TOKEN 
-            }));
-            console.log(`✅ Webhook de Telegram configurado correctamente.`);
-        } catch (e) {
-            console.error('❌ Error al crear el webhook de Telegram', e);
-        }
-    };
-    
-    startWebhook();
+    // --- CONFIGURACIÓN DEL WEBHOOK (MÉTODO ROBUSTO) ---
+    // 1. Definimos una ruta predecible y secreta para el webhook.
+    const secretPath = `/telegraf/${process.env.TELEGRAM_BOT_TOKEN}`;
+
+    // 2. Le decimos a Express que escuche peticiones POST en esa ruta específica.
+    // Telegraf se encargará de parsear el cuerpo y manejar la actualización.
+    // El middleware de Telegraf también valida el 'secret_token' si se proporciona al registrar el webhook.
+    app.post(secretPath, (req, res) => {
+        bot.handleUpdate(req.body, res);
+    });
+
+    // 3. Registramos explícitamente el webhook en la API de Telegram al arrancar.
+    bot.telegram.setWebhook(`${process.env.RENDER_EXTERNAL_URL}${secretPath}`, {
+        secret_token: process.env.TELEGRAM_SECRET_TOKEN
+    }).then(() => {
+        console.log(`✅ Webhook configurado en la ruta: ${secretPath}`);
+    }).catch((err) => {
+        console.error('❌ Error al configurar el webhook:', err);
+    });
 
 } else {
-    console.warn("⚠️ ADVERTENCIA: Faltan variables de entorno para el bot de Telegram. El bot no se iniciará.");
+    console.warn("⚠️ ADVERTENCIA: Faltan variables de entorno para el bot de Telegram (TOKEN, URL o SECRET). El bot no se iniciará.");
 }
 
 // --- ARRANQUE FINAL DEL SERVIDOR ---
