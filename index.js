@@ -3,7 +3,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
-const { Telegraf } = require('telegraf');
+const { Telegraf , Markup } = require('telegraf');
 
 // --- 1. IMPORTAMOS RUTAS Y SERVICIOS ---
 const userController = require('./controllers/userController');
