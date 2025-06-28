@@ -1,18 +1,13 @@
-// --- START OF FILE atu-mining-api/routes/userRoutes.js (CORREGIDO Y LIMPIO) ---
-
+// --- START OF FILE atu-mining-api/routes/userRoutes.js (FINAL) ---
 const express = require('express');
 const router = express.Router();
-
-// Importamos el controlador de usuario
 const userController = require('../controllers/userController');
 
-// --- Definición de Rutas ---
-// ¡IMPORTANTE! LA RUTA /sync HA SIDO ELIMINADA DE AQUÍ
-// para ser definida directamente en el index.js principal de la API.
+// La ruta /sync ya no se define aquí.
 
-// Esta ruta para obtener datos sí se queda aquí.
-// El enrutador principal la montará en: /api/users/data/:telegramId
+// Se mantiene la ruta para obtener datos de un usuario por su ID
+// Será montada como /api/users/data/:telegramId
 router.get('/data/:telegramId', userController.getUserData);
 
 module.exports = router;
-// --- END OF FILE atu-mining-api/routes/userRoutes.js (CORREGIDO Y LIMPIO) ---
+// --- END OF FILE atu-mining-api/routes/userRoutes.js (FINAL) ---

@@ -1,4 +1,4 @@
-// --- START OF FILE atu-mining-api/controllers/userController.js (LIMPIO) ---
+// --- START OF FILE atu-mining-api/controllers/userController.js (FINAL) ---
 const User = require('../models/User');
 const ECONOMY_CONFIG = require('../config/economy');
 
@@ -44,8 +44,7 @@ const syncUser = async (req, res) => {
 const getUserData = async (req, res) => {
     try {
         const { telegramId } = req.params;
-        const user = await User.findOne({ telegramId: parseInt(telegramId, 10) }).populate({ path: 'referrals', select: 'firstName photoUrl autBalance' });
-
+        const user = await User.findOne({ telegramId: parseInt(telegramId, 10) }).populate({ path: 'referrals', select: 'firstName photoUrl' });
         if (!user) {
             return res.status(404).json({ message: 'Usuario no encontrado' });
         }
@@ -61,4 +60,4 @@ const getUserData = async (req, res) => {
 };
 
 module.exports = { syncUser, getUserData };
-// --- END OF FILE atu-mining-api/controllers/userController.js (LIMPIO) ---
+// --- END OF FILE atu-mining-api/controllers/userController.js (FINAL) ---
