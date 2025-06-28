@@ -63,10 +63,48 @@ app.use('/api/referrals', referralRoutes); // Registramos la ruta de referidos
 const secretPath = `/telegraf/${bot.secret}`;
 bot.telegram.setWebhook(`${process.env.WEBHOOK_URL}${secretPath}`);
 app.use(bot.webhookCallback(secretPath));
-bot.start((ctx) => ctx.reply('Bienvenido a ATU Mining.'));
+
 
 app.get('/', (req, res) => res.send('ATU Mining API está en línea. OK.'));
 const PORT = process.env.PORT || 3000;
+bot.start((ctx) => {
+    // URL de una imagen de bienvenida. Puedes crear una y subirla a un host como Imgur o Postimages.
+    const welcomeImageUrl = 'https://postimg.cc/hQtL6wsT'; // URL de ejemplo, ¡cámbiala!
+
+    // Mensaje de bienvenida con formato Markdown
+    const welcomeMessage = 
+`🎉 *¡Bienvenido a ATU Mining, ${ctx.from.first_name}!* 🎉
+
+Prepárate para sumergirte en el mundo de la minería de criptomonedas.
+
+🤖 Tu misión es:
+⛏️  *Minar* el token del juego, **AUT**, de forma automática.
+💎  *Mejorar* tu equipo con **Boosts** para acelerar tu producción.
+💰  *Intercambiar* tus AUT por **USDT** y retirarlos.
+
+¡Construye tu imperio minero y compite para llegar a la cima del ranking!
+
+👇 Haz clic en el botón de abajo para empezar a minar.`;
+
+    // Botón que abre la Mini App
+    const keyboard = Markup.inlineKeyboard([
+        [Markup.button.webApp('🚀 Iniciar Minero', process.env.FRONTEND_URL)] // Asegúrate de tener FRONTEND_URL en .env
+    ]);
+
+    // Enviamos la foto con el texto y el botón
+    ctx.replyWithPhoto(welcomeImageUrl, {
+        caption: welcomeMessage,
+        parse_mode: 'Markdown',
+        reply_markup: keyboard.reply_markup
+    }).catch(async (e) => {
+        // Fallback por si la imagen falla o el cliente no la soporta
+        console.error("Error al enviar foto de bienvenida, enviando solo texto:", e.message);
+        await ctx.reply(welcomeMessage, {
+            parse_mode: 'Markdown',
+            reply_markup: keyboard.reply_markup
+        });
+    });
+});
 app.listen(PORT, () => {
     console.log(`✅ API: Servidor escuchando en el puerto ${PORT}`);
 });
