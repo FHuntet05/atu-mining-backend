@@ -1,9 +1,9 @@
-// atu-mining-api/controllers/userController.js (VERSIÓN FINAL Y COMPLETA)
+// atu-mining-api/controllers/userController.js (VERSIÓN FINAL CON REGISTRO DE REFERIDO CORREGIDO)
 const User = require('../models/User');
 const ECONOMY_CONFIG = require('../config/economy');
 const Transaction = require('../models/Transaction');
 
-// --- CONSTANTES DE JUEGO ---
+// --- CONSTANTES DE JUEGO (sin cambios) ---
 const CYCLE_DURATION_HOURS = 24;
 const CYCLE_DURATION_MS = CYCLE_DURATION_HOURS * 60 * 60 * 1000;
 const BASE_YIELD_PER_HOUR = 350 / 24;
@@ -11,51 +11,50 @@ const BASE_YIELD_PER_HOUR = 350 / 24;
 const syncUser = async (req, res) => {
     try {
         const { telegramId, firstName, username, photoUrl, refCode } = req.body;
-        if (!telegramId) {
-            return res.status(400).json({ message: 'Telegram ID es requerido.' });
-        }
+        if (!telegramId) return res.status(400).json({ message: 'Telegram ID es requerido.' });
         
         let user = await User.findOne({ telegramId });
-        let isNewUser = !user;
+        
+        if (!user) { // Es un usuario nuevo
+            user = new User({ telegramId, firstName, username, photoUrl, hasSeenWelcome: true });
 
-        if (isNewUser) {
-            user = new User({ telegramId, firstName, username, photoUrl });
-            // --- LÓGICA DE REFERIDO ---
+            // --- !! LÓGICA DE REFERIDO CORREGIDA Y ATÓMICA !! ---
             if (refCode) {
-                const referrer = await User.findOne({ telegramId: parseInt(refCode, 10) });
+                // Buscamos al referente y usamos $push para añadir al nuevo usuario a su lista de referidos.
+                // findOneAndUpdate es una operación atómica, lo que la hace más segura.
+                const referrer = await User.findOneAndUpdate(
+                    { telegramId: parseInt(refCode, 10) },
+                    { $push: { referrals: user._id } }, // Añade el ID del nuevo usuario al array 'referrals'
+                    { new: true } // Opcional: devuelve el documento del referente actualizado
+                );
+
                 if (referrer) {
+                    // Si se encontró y actualizó al referente, guardamos el ID del referente en el nuevo usuario.
                     user.referrerId = referrer._id;
-                    // Añadimos el nuevo usuario a la lista de referidos del referente
-                    referrer.referrals.push(user._id);
-                    await referrer.save();
+                    console.log(`[Referral] Usuario ${telegramId} asignado como referido de ${referrer.telegramId}`);
                 }
             }
-        } else {
+            await user.save();
+        } else { // Es un usuario existente
             user.firstName = firstName || user.firstName;
             user.username = username || user.username;
             user.photoUrl = photoUrl || user.photoUrl;
+            await user.save();
         }
-
-        let showWelcome = false;
-        if (!user.hasSeenWelcome) {
-            showWelcome = true;
-            user.hasSeenWelcome = true; 
-        }
-
-        await user.save();
         
         const populatedUser = await User.findById(user._id).populate({ path: 'referrals', select: 'firstName photoUrl' });
         const userObject = populatedUser.toObject();
-        
         userObject.config = ECONOMY_CONFIG;
-        userObject.showWelcomeModal = showWelcome;
+        userObject.showWelcomeModal = !user.hasSeenWelcome; // La lógica de bienvenida debe estar aquí
         
         res.status(200).json(userObject);
     } catch (error) {
         console.error('Error fatal en syncUser:', error);
-        res.status(500).json({ message: 'Error interno grave al sincronizar el usuario.', details: error.message });
+        res.status(500).json({ message: 'Error interno grave al sincronizar.', details: error.message });
     }
 };
+
+// --- claimRewards y getUserData (SIN CAMBIOS) ---
 
 const claimRewards = async (req, res) => {
     try {
