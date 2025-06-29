@@ -1,6 +1,4 @@
-// index.js - VERSIÓN DE DIAGNÓSTICO FINAL (v3)
-console.log("--- [v3] Ejecutando index.js ---");
-
+// index.js - VERSIÓN FINAL CON BÚSQUEDA FLEXIBLE
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
@@ -62,11 +60,11 @@ if (process.env.TELEGRAM_BOT_TOKEN && process.env.RENDER_EXTERNAL_URL && process
 
     const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
     
+    // Log para ver toda la actividad del bot
     bot.use(Telegraf.log());
 
     // --- COMANDO /start (Público para todos los usuarios) ---
     bot.command('start', (ctx) => {
-        console.log(`➡️ [v3] Comando /start recibido del usuario: ${ctx.from.id}`);
         const welcomeMessage = `¡Bienvenido a ATU Mining USDT! 🚀\n\nPresiona el botón de abajo para iniciar la aplicación y comenzar a minar.`;
         ctx.reply(welcomeMessage, {
             reply_markup: {
@@ -78,9 +76,8 @@ if (process.env.TELEGRAM_BOT_TOKEN && process.env.RENDER_EXTERNAL_URL && process
         });
     });
 
-    // --- COMANDO /addboost (Solo para Administradores) - VERSIÓN FINAL CON TELEMETRÍA ---
+    // --- COMANDO /addboost (CON LA BÚSQUEDA CORREGIDA Y FLEXIBLE) ---
     bot.command('addboost', async (ctx) => {
-        console.log(`➡️ [v3] Comando /addboost recibido del admin: ${ctx.from.id}`);
         const adminIds = (process.env.ADMIN_TELEGRAM_IDS || '').split(',');
         const userId = ctx.from.id.toString();
 
@@ -93,13 +90,11 @@ if (process.env.TELEGRAM_BOT_TOKEN && process.env.RENDER_EXTERNAL_URL && process
             return ctx.reply('Formato incorrecto. Uso: /addboost <ID_TELEGRAM_USUARIO> <ID_BOOST> <CANTIDAD>');
         }
     
-        const targetUserId = parseInt(parts[1], 10);
+        const targetUserIdNum = parseInt(parts[1], 10);
         const quantity = parseInt(parts[3], 10);
+        const boostId = parts[2]; // Tomamos el ID del boost tal cual
         
-        // LÍNEA CRÍTICA: No convertimos a mayúsculas
-        const boostId = parts[2];
-        
-        if (isNaN(targetUserId)) {
+        if (isNaN(targetUserIdNum)) {
             return ctx.reply('El ID de Telegram del usuario debe ser un número válido.');
         }
         if (isNaN(quantity) || quantity <= 0) {
@@ -107,23 +102,33 @@ if (process.env.TELEGRAM_BOT_TOKEN && process.env.RENDER_EXTERNAL_URL && process
         }
     
         try {
-            const targetUser = await User.findOne({ telegramId: targetUserId });
+            // --- BÚSQUEDA FLEXIBLE (LA SOLUCIÓN FINAL) ---
+            // Busca un usuario donde el telegramId coincida con el NÚMERO O el TEXTO.
+            // Esto soluciona problemas de datos guardados incorrectamente en el pasado.
+            const targetUser = await User.findOne({ 
+                $or: [
+                    { telegramId: targetUserIdNum }, 
+                    { telegramId: String(targetUserIdNum) }
+                ] 
+            });
+            
             if (!targetUser) {
-                return ctx.reply(`❌ Error: No se encontró un usuario con el ID de Telegram ${targetUserId}. Asegúrate de que el usuario ha iniciado la app al menos una vez.`);
+                return ctx.reply(`❌ Error: Usuario con ID ${targetUserIdNum} no encontrado en la base de datos. Asegúrate de que el usuario ha interactuado con la app al menos una vez.`);
             }
 
-            // Usamos 'null' para la sesión porque el comando se ejecuta fuera de una transacción.
+            // Usamos 'null' para la sesión porque esta operación no forma parte de una transacción mayor.
             await boostService.grantBoostsToUser({ userId: targetUser._id, boostId: boostId, quantity: quantity, session: null });
             
-            ctx.reply(`✅ ¡Éxito! Se añadieron ${quantity} boost(s) de tipo "${boostId}" al usuario con ID de Telegram ${targetUserId}.`);
+            ctx.reply(`✅ ¡Éxito! Se añadieron ${quantity} boost(s) de tipo "${boostId}" al usuario con ID de Telegram ${targetUserIdNum}.`);
 
         } catch (error) {
-            console.error(`❌ [v3] Error en comando /addboost:`, error);
+            console.error(`❌ Error en comando /addboost:`, error);
+            // Enviamos el mensaje de error específico que viene del servicio, si existe.
             ctx.reply(error.message || 'Ocurrió un error inesperado al procesar el comando.');
         }
     });
 
-    // --- CONFIGURACIÓN DEL WEBHOOK ---
+    // --- CONFIGURACIÓN DEL WEBHOOK (MÉTODO ROBUSTO) ---
     const secretPath = `/telegraf/${process.env.TELEGRAM_BOT_TOKEN}`;
     app.post(secretPath, (req, res) => {
         bot.handleUpdate(req.body, res);
@@ -131,7 +136,7 @@ if (process.env.TELEGRAM_BOT_TOKEN && process.env.RENDER_EXTERNAL_URL && process
     bot.telegram.setWebhook(`${process.env.RENDER_EXTERNAL_URL}${secretPath}`, {
         secret_token: process.env.TELEGRAM_SECRET_TOKEN
     }).then(() => {
-        console.log(`✅ Webhook configurado en la ruta: ${secretPath}`);
+        console.log(`✅ Webhook configurado correctamente en la ruta: ${secretPath}`);
     }).catch((err) => {
         console.error('❌ Error al configurar el webhook:', err);
     });
