@@ -1,4 +1,6 @@
-import mongoose from 'mongoose';
+// atu-mining-api/models/User.js - VERSIÓN FINAL Y CORRECTA CON CommonJS
+
+const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
     telegramId: { type: Number, required: true, unique: true, index: true },
@@ -8,7 +10,7 @@ const userSchema = new mongoose.Schema({
     
     // Balances
     autBalance: { type: Number, default: 0 },
-    usdtBalance: { type: Number, default: 0 }, // SALDO ÚNICO
+    usdtBalance: { type: Number, default: 0 },
     
     // Minería y Boosts
     lastClaim: { type: Date, default: Date.now },
@@ -24,7 +26,7 @@ const userSchema = new mongoose.Schema({
     // Metadata y Tareas
     lastWithdrawalRequest: { type: Date, default: null },
     completedTasks: [{ type: String }],
-    hasSeenWelcome: { type: Boolean, default: false }, // NUEVO FLAG
+    hasSeenWelcome: { type: Boolean, default: false },
 
 }, { timestamps: true });
 
@@ -44,4 +46,7 @@ userSchema.statics.findOrCreate = async function(tgUser) {
 };
 
 const User = mongoose.model('User', userSchema);
-export default User;
+
+// ESTA ES LA LÍNEA MÁS IMPORTANTE Y LA CAUSA DEL ERROR
+// Asegura que el modelo se exporte correctamente para 'require'
+module.exports = User;
