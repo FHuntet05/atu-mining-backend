@@ -76,8 +76,14 @@ app.use('/api/withdrawal', withdrawalRoutes);
 if (process.env.TELEGRAM_BOT_TOKEN && process.env.RENDER_EXTERNAL_URL && process.env.TELEGRAM_SECRET_TOKEN) {
 
     const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
-    
+
     bot.use(Telegraf.log());
+    const refCode = ctx.startPayload; 
+    let url = process.env.FRONTEND_URL;
+
+     if (refCode) {
+        url += `?ref=${refCode}`;
+    }
 
     // --- COMANDO /start ---
     bot.command('start', (ctx) => {
@@ -86,7 +92,7 @@ if (process.env.TELEGRAM_BOT_TOKEN && process.env.RENDER_EXTERNAL_URL && process
             reply_markup: {
                 inline_keyboard: [[{ 
                     text: '⛏️ Abrir App de Minería', 
-                    web_app: { url: process.env.FRONTEND_URL }
+                    web_app: { url } 
                 }]]
             }
         });

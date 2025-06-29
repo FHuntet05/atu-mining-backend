@@ -1,24 +1,40 @@
-// --- START OF FILE atu-mining-api/controllers/userController.js (FINAL) ---
+// atu-mining-api/controllers/userController.js (VERSIÓN FINAL Y COMPLETA)
 const User = require('../models/User');
 const ECONOMY_CONFIG = require('../config/economy');
+const Transaction = require('../models/Transaction');
+
+// --- CONSTANTES DE JUEGO ---
+const CYCLE_DURATION_HOURS = 24;
+const CYCLE_DURATION_MS = CYCLE_DURATION_HOURS * 60 * 60 * 1000;
+const BASE_YIELD_PER_HOUR = 350 / 24;
 
 const syncUser = async (req, res) => {
     try {
-        const tgUserData = req.body;
-        if (!tgUserData?.telegramId) {
+        const { telegramId, firstName, username, photoUrl, refCode } = req.body;
+        if (!telegramId) {
             return res.status(400).json({ message: 'Telegram ID es requerido.' });
         }
         
-        let user = await User.findOrCreate({
-            id: tgUserData.telegramId,
-            first_name: tgUserData.firstName,
-            username: tgUserData.username,
-            photo_url: tgUserData.photoUrl,
-        });
-        
-        user.firstName = tgUserData.firstName || user.firstName;
-        user.username = tgUserData.username || user.username;
-        user.photoUrl = tgUserData.photoUrl || user.photoUrl;
+        let user = await User.findOne({ telegramId });
+        let isNewUser = !user;
+
+        if (isNewUser) {
+            user = new User({ telegramId, firstName, username, photoUrl });
+            // --- LÓGICA DE REFERIDO ---
+            if (refCode) {
+                const referrer = await User.findOne({ telegramId: parseInt(refCode, 10) });
+                if (referrer) {
+                    user.referrerId = referrer._id;
+                    // Añadimos el nuevo usuario a la lista de referidos del referente
+                    referrer.referrals.push(user._id);
+                    await referrer.save();
+                }
+            }
+        } else {
+            user.firstName = firstName || user.firstName;
+            user.username = username || user.username;
+            user.photoUrl = photoUrl || user.photoUrl;
+        }
 
         let showWelcome = false;
         if (!user.hasSeenWelcome) {
@@ -42,72 +58,54 @@ const syncUser = async (req, res) => {
 };
 
 const claimRewards = async (req, res) => {
-    // --- SONDA DE INICIO ---
-    console.log(`[CLAIM] Petición de reclamación recibida para telegramId: ${req.body.telegramId}`);
-
     try {
         const { telegramId } = req.body;
         if (!telegramId) {
-            console.error('[CLAIM_ERROR] No se proporcionó Telegram ID.');
             return res.status(400).json({ message: 'Telegram ID es requerido.' });
         }
 
         const user = await User.findOne({ telegramId });
         if (!user) {
-            console.error(`[CLAIM_ERROR] Usuario no encontrado con ID: ${telegramId}`);
             return res.status(404).json({ message: 'Usuario no encontrado.' });
         }
         
-        // --- SONDA DE ESTADO INICIAL ---
-        console.log(`[CLAIM] Usuario encontrado. Balance AUT actual: ${user.autBalance}. Último reclamo: ${user.lastClaim}`);
-//AQUUIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-        const CYCLE_DURATION_MS = CYCLE_DURATION_HOURS * 60 * 60 * 1000;
         const elapsedTime = Date.now() - new Date(user.lastClaim).getTime();
 
-        if (elapsedTime < cycleDurationMs) {
-            console.warn(`[CLAIM_WARN] Intento de reclamo prematuro. Tiempo restante: ${cycleDurationMs - elapsedTime}ms`);
+        if (elapsedTime < CYCLE_DURATION_MS) {
             return res.status(403).json({ message: 'Aún no puedes reclamar. El ciclo no ha terminado.' });
         }
         
-        const rewardAmount = ECONOMY_CONFIG.DAILY_CLAIM_REWARD || 350;
+        const totalYieldPerHour = BASE_YIELD_PER_HOUR + (user.boostYieldPerHour || 0);
+        const rewardAmount = totalYieldPerHour * CYCLE_DURATION_HOURS;
         
-        // --- SONDA DE CÁLCULO ---
-        console.log(`[CLAIM] Calculando recompensa. Monto: ${rewardAmount}. Tipo de dato de rewardAmount: ${typeof rewardAmount}`);
-        console.log(`[CLAIM] Tipo de dato de user.autBalance: ${typeof user.autBalance}`);
-
-        // Actualización en memoria
         user.autBalance += rewardAmount;
+        user.totalMinedAUT += rewardAmount;
         user.lastClaim = new Date();
 
-        // --- SONDA PRE-GUARDADO ---
-        console.log(`[CLAIM] Balance actualizado en memoria. Nuevo AUT: ${user.autBalance}. Nueva fecha de reclamo: ${user.lastClaim}`);
-        
-        // El momento de la verdad
         await user.save();
 
-        // --- SONDA POST-GUARDADO ---
-        console.log('[CLAIM] ¡ÉXITO! El usuario ha sido guardado en la base de datos.');
+        await Transaction.create({
+            userId: user._id, type: 'claim_mining', currency: 'AUT',
+            amount: rewardAmount, status: 'completed',
+            details: 'Recompensa de minería reclamada'
+        });
 
         res.status(200).json({
-            message: `¡Has reclamado ${rewardAmount} AUT!`,
+            message: `¡Has reclamado ${Math.round(rewardAmount)} AUT!`,
             user: user
         });
 
     } catch (error) {
-        // --- SONDA DE ERROR CATASTRÓFICO ---
-        console.error('[CLAIM_FATAL_ERROR] Ha ocurrido un error en el bloque try-catch:', error);
-        res.status(500).json({ message: 'Error interno del servidor.' });
+        console.error('[CLAIM_FATAL_ERROR] Ha ocurrido un error:', error);
+        res.status(500).json({ message: 'Error interno del servidor al reclamar.' });
     }
 };
- 
 
 const getUserData = async (req, res) => {
     try {
         const { telegramId } = req.params;
         const user = await User.findOne({ telegramId: parseInt(telegramId, 10) }).populate({ path: 'referrals', select: 'firstName photoUrl' });
-        if (!user) {
-            return res.status(404).json({ message: 'Usuario no encontrado' });
-        }
+        if (!user) return res.status(404).json({ message: 'Usuario no encontrado' });
         
         const userObject = user.toObject();
         userObject.config = ECONOMY_CONFIG;
@@ -119,5 +117,4 @@ const getUserData = async (req, res) => {
     }
 };
 
-module.exports = { syncUser, getUserData , claimRewards };
-// --- END OF FILE atu-mining-api/controllers/userController.js (FINAL) ---
+module.exports = { syncUser, getUserData, claimRewards };
