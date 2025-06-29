@@ -16,6 +16,8 @@ const boostService = require('./services/boost.service');
 const User = require('./models/User');
 const { startVigilante } = require('./services/transaction.service'); 
 const configRoutes = require('./routes/configRoutes');
+const exchangeRoutes = require('./routes/exchangeRoutes'); // Asegúrate de que la ruta al archivo es correcta
+const withdrawalRoutes = require('./routes/withdrawalRoutes'); // Hacemos lo mismo para el retiro, por si acaso
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -62,6 +64,9 @@ app.use('/api/referrals', referralRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/config', configRoutes);
+app.use('/api/exchange', exchangeRoutes);
+app.use('/api/withdrawal', withdrawalRoutes);
+
 
 
 // =================================================================
