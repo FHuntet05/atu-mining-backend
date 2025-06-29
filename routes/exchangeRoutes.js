@@ -1,4 +1,4 @@
-// --- START OF FILE atu-mining-backend/routes/exchangeRoutes.js (VERSIÓN FINAL) ---
+// --- START OF FILE atu-mining-backend/routes/exchangeRoutes.js (VERSIÓN CORREGIDA FINAL) ---
 
 const express = require('express');
 const router = express.Router();
@@ -21,10 +21,14 @@ router.post('/', async (req, res) => {
         }
         
         const usdtToAdd = parseFloat(usdtEquivalent.toFixed(6));
+        const userIdString = String(telegramId); // Convertimos a string para la búsqueda
 
+        // --- BÚSQUEDA FLEXIBLE Y OPERACIÓN ATÓMICA ---
         const updatedUser = await User.findOneAndUpdate(
             { 
-                telegramId: telegramId, 
+                // Buscamos el ID como número O como string
+                $or: [{ telegramId: telegramId }, { telegramId: userIdString }],
+                // La condición del balance sigue igual
                 autBalance: { $gte: amountToExchange }
             },
             { 
@@ -37,10 +41,9 @@ router.post('/', async (req, res) => {
         );
 
         if (!updatedUser) {
-            return res.status(400).json({ message: 'No tienes suficientes AUT para intercambiar.' });
+            return res.status(400).json({ message: 'No tienes suficientes AUT para intercambiar o el usuario no fue encontrado.' });
         }
 
-        // --- CREACIÓN DE TRANSACCIÓN A PRUEBA DE FALLOS ---
         try {
             await Transaction.create({
                 userId: updatedUser._id,
@@ -51,7 +54,6 @@ router.post('/', async (req, res) => {
                 details: `Intercambio de ${amountToExchange.toLocaleString()} AUT`
             });
         } catch (transactionError) {
-            // Si falla, solo lo registramos. La operación principal ya tuvo éxito.
             console.error("Error al crear el registro de la transacción de intercambio:", transactionError);
         }
         
@@ -64,4 +66,4 @@ router.post('/', async (req, res) => {
 });
 
 module.exports = router;
-// --- END OF FILE atu-mining-backend/routes/exchangeRoutes.js (VERSIÓN FINAL) ---
+// --- END OF FILE atu-mining-backend/routes/exchangeRoutes.js (VERSIÓN CORREGIDA FINAL) ---
