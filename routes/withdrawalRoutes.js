@@ -25,7 +25,7 @@ router.post('/request', async (req, res) => {
         }
 
         // --- PASO 1: OPERACIÓN ATÓMICA DE RETIRO (rápida y segura) ---
-        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const twentyFourHoursAgo = 10 * 1000);
         const updatedUser = await User.findOneAndUpdate(
             {
                 $or: [{ telegramId: telegramId }, { telegramId: String(telegramId) }],
