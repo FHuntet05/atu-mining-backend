@@ -1,4 +1,4 @@
-// --- START OF FILE atu-mining-backend/services/boost.service.js ---
+// atu-mining-api/services/boost.service.js (VERSIÓN FINAL Y CORRECTA)
 
 const mongoose = require('mongoose');
 const User = require('../models/User');
@@ -7,26 +7,21 @@ const Transaction = require('../models/Transaction');
 const BOOSTS_CONFIG = require('../config/boosts');
 const TASKS_CONFIG = require('../config/tasks');
 
-/**
- * Asigna uno o más boosts a un usuario y maneja las recompensas/comisiones asociadas.
- * Esta función está diseñada para ser llamada desde una transacción de Mongoose existente.
- *
- * @param {object} options
- * @param {string} options.userId - El ObjectId del usuario.
- * @param {string} options.boostId - El ID del boost a comprar (ej: 'boost_lvl_1').
- * @param {number} options.quantity - La cantidad de boosts a comprar.
- * @param {mongoose.ClientSession} options.session - La sesión de Mongoose para la transacción.
- * @param {string} [options.purchaseMethod='crypto'] - 'crypto' o 'balance'.
- * @param {number} [options.totalCost=0] - El costo total si se paga con saldo.
- * @returns {Promise<void>}
- */
 async function grantBoostsToUser({ userId, boostId, quantity, session, purchaseMethod = 'crypto', totalCost = 0 }) {
     
+    // --- BÚSQUEDA POR ID DE TEXTO (LÓGICA CORRECTA) ---
+    const boostToBuy = BOOSTS_CONFIG.find(b => b.id === boostId);
+    
+    // --- VALIDACIÓN CORRECTA ---
+    if (!boostToBuy) {
+        // Obtenemos los IDs de texto válidos para el mensaje de error
+        const validIds = BOOSTS_CONFIG.map(b => b.id).join(', ');
+        // Este es el error que deberías ver si el ID es incorrecto
+        throw new Error(`El ID de Boost "${boostId}" no es válido. Los IDs válidos son: ${validIds}`);
+    }
+
     const user = await User.findById(userId).session(session);
     if (!user) throw new Error(`Usuario no encontrado para la asignación de boost: ${userId}`);
-    
-    const boostToBuy = BOOSTS_CONFIG.find(b => b.id === boostId);
-    if (!boostToBuy) throw new Error(`Configuración de boost no encontrada: ${boostId}`);
     
     // --- LÓGICA DE LA MISIÓN "PRIMER BOOST" ---
     const firstBoostTask = TASKS_CONFIG.find(t => t.type === 'first_boost');
@@ -44,7 +39,6 @@ async function grantBoostsToUser({ userId, boostId, quantity, session, purchaseM
         }], { session });
     }
 
-    // Si se paga con saldo, se resta del balance
     if (purchaseMethod === 'balance') {
         if (user.usdtBalance < totalCost) throw new Error('Saldo insuficiente para la compra.');
         user.usdtBalance -= totalCost;
@@ -72,5 +66,3 @@ async function grantBoostsToUser({ userId, boostId, quantity, session, purchaseM
 }
 
 module.exports = { grantBoostsToUser };
-
-// --- END OF FILE atu-mining-backend/services/boost.service.js ---
