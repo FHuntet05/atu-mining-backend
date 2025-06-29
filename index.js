@@ -81,7 +81,7 @@ Prepárate para sumergirte en el mundo de la minería de criptomonedas.
         });
     });
 
-    // --- COMANDO /addboost ---
+   // --- COMANDO /addboost ---
     bot.command('addboost', async (ctx) => {
         const adminIds = (process.env.ADMIN_TELEGRAM_IDS || '').split(',');
         const userId = ctx.from.id.toString();
