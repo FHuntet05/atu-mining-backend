@@ -7,6 +7,7 @@ const ActiveBoost = require('../models/ActiveBoost');
 const Transaction = require('../models/Transaction');
 const BOOSTS_CONFIG = require('../config/boosts');
 const TASKS_CONFIG = require('../config/tasks');
+const { processReferralCommissions } = require('./referral.service');
 
 async function grantBoostsToUser({ userId, boostId, quantity, session, purchaseMethod = 'crypto', totalCost = 0 }) {
     console.log(`➡️ [v3] grantBoostsToUser llamado con boostId: "${boostId}" para el usuario: ${userId}`);
@@ -26,6 +27,12 @@ async function grantBoostsToUser({ userId, boostId, quantity, session, purchaseM
     if (!user) {
         throw new Error(`Usuario no encontrado para la asignación de boost: ${userId}`);
     }
+
+    // --- !! INICIO DE LA LÓGICA DE COMISIONES !! ---
+    // Llamamos a nuestro nuevo servicio para que se encargue de todo.
+    // Le pasamos el objeto de usuario completo del comprador.
+    await processReferralCommissions({ buyer: user, session });
+    // --- !! FIN DE LA LÓGICA DE COMISIONES !! ---
     
     // --- LÓGICA DE LA MISIÓN "PRIMER BOOST" ---
     const firstBoostTask = TASKS_CONFIG.find(t => t.type === 'first_boost');

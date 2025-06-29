@@ -64,9 +64,8 @@ exports.getTasks = async (req, res) => {
 exports.claimTask = async (req, res) => {
     try {
         const { telegramId, taskId } = req.body;
-        const user = await User.findOne({ telegramId });
         const task = TASKS.find(t => t.id === taskId);
-
+        const user = await User.findOne({ telegramId }).populate('referrals');
         if (!user || !task) {
             return res.status(404).json({ message: 'Usuario o tarea no encontrada.' });
         }
@@ -75,21 +74,13 @@ exports.claimTask = async (req, res) => {
             return res.status(400).json({ message: 'Ya has reclamado esta tarea.' });
         }
 
-        // Lógica de verificación final antes de pagar
-        if (task.type === 'join_group') {
-            const bot = req.app.get('bot');
-            if (!GROUP_CHAT_ID || !bot) return res.status(400).json({ message: 'La verificación del grupo no está disponible.' });
-            
-            try {
-                const chatMember = await bot.telegram.getChatMember(GROUP_CHAT_ID, telegramId);
-                if (!['member', 'administrator', 'creator'].includes(chatMember.status)) {
-                    return res.status(400).json({ message: 'Debes unirte al grupo para reclamar.' });
-                }
-            } catch (e) {
-                return res.status(400).json({ message: 'No se pudo confirmar que estás en el grupo.' });
+       // --- LÓGICA DE VERIFICACIÓN ANTES DE PAGAR ---
+        if (task.type === 'invite_10') {
+            if (user.referrals.length < 10) {
+                return res.status(400).json({ message: 'Aún no tienes 10 amigos invitados para reclamar.' });
             }
         }
-        
+        // Para "join_group" y otras, no hay verificación, confiamos en el clic del usuario.
         // Aquí se añadirían verificaciones para otros tipos de tareas si fuera necesario.
 
         user.autBalance += task.reward;
@@ -110,7 +101,7 @@ exports.claimTask = async (req, res) => {
             message: `¡Recompensa de ${task.reward.toLocaleString()} AUT reclamada!`, 
             user: updatedUser 
         });
-
+        
     } catch (error) {
         console.error("Error en claimTask:", error);
         res.status(500).json({ message: 'Error del servidor al reclamar la tarea.' });

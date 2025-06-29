@@ -1,5 +1,4 @@
-// atu-mining-api/models/User.js - VERSIÓN FINAL Y CORRECTA CON CommonJS
-
+// atu-mining-api/models/User.js (VERSIÓN FINAL CON FLAG DE COMISIÓN)
 const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
@@ -7,27 +6,20 @@ const userSchema = new mongoose.Schema({
     firstName: { type: String, required: true },
     username: { type: String, required: false },
     photoUrl: { type: String, required: false },
-    
-    // Balances
     autBalance: { type: Number, default: 0 },
     usdtBalance: { type: Number, default: 0 },
-    
-    // Minería y Boosts
     lastClaim: { type: Date, default: Date.now },
     boostYieldPerHour: { type: Number, default: 0 },
     activeBoosts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'ActiveBoost' }],
     totalMinedAUT: { type: Number, default: 0, index: true },
-
-    // Referidos
     referrerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     referrals: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     referralEarnings: { type: Number, default: 0 },
-
-    // Metadata y Tareas
-    lastWithdrawalRequest: { type: Date, default: null },
     completedTasks: [{ type: String }],
     hasSeenWelcome: { type: Boolean, default: false },
-
+    // --- !! CAMPO NUEVO !! ---
+    // Para asegurar que un usuario solo genere comisión por referido una vez.
+    hasGeneratedReferralCommission: { type: Boolean, default: false },
 }, { timestamps: true });
 
 userSchema.statics.findOrCreate = async function(tgUser) {

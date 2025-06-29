@@ -76,7 +76,7 @@ app.use('/api/withdrawal', withdrawalRoutes);
 if (process.env.TELEGRAM_BOT_TOKEN && process.env.RENDER_EXTERNAL_URL && process.env.TELEGRAM_SECRET_TOKEN) {
 
     const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
-
+    app.set('bot', bot);
     bot.use(Telegraf.log());
    
 
@@ -88,7 +88,7 @@ if (process.env.TELEGRAM_BOT_TOKEN && process.env.RENDER_EXTERNAL_URL && process
      if (refCode) {
         url += `?ref=${refCode}`;
     }
-    
+
         const welcomeMessage = `¡Bienvenido a ATU Mining USDT! 🚀\n\nPresiona el botón de abajo para iniciar la aplicación y comenzar a minar.`;
         ctx.reply(welcomeMessage, {
             reply_markup: {

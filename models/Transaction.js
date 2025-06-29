@@ -4,7 +4,7 @@ const transactionSchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     type: {
         type: String,
-        enum: ['deposit', 'purchase', 'claim_mining', 'claim_task', 'exchange', 'withdrawal_request', 'withdrawal_approved', 'withdrawal_rejected'],
+        enum: ['deposit', 'purchase', 'claim_mining', 'claim_task', 'exchange', 'withdrawal_request', 'withdrawal_approved', 'withdrawal_rejected',  'referral_commission' ],
         required: true,
     },
     currency: { type: String, enum: ['USDT', 'AUT'], required: true },
