@@ -78,15 +78,17 @@ if (process.env.TELEGRAM_BOT_TOKEN && process.env.RENDER_EXTERNAL_URL && process
     const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 
     bot.use(Telegraf.log());
-    const refCode = ctx.startPayload; 
+   
+
+    // --- COMANDO /start ---
+    bot.command('start', (ctx) => {
+         const refCode = ctx.startPayload; 
     let url = process.env.FRONTEND_URL;
 
      if (refCode) {
         url += `?ref=${refCode}`;
     }
-
-    // --- COMANDO /start ---
-    bot.command('start', (ctx) => {
+    
         const welcomeMessage = `¡Bienvenido a ATU Mining USDT! 🚀\n\nPresiona el botón de abajo para iniciar la aplicación y comenzar a minar.`;
         ctx.reply(welcomeMessage, {
             reply_markup: {
