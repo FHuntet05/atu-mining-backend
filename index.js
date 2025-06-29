@@ -81,19 +81,10 @@ if (process.env.TELEGRAM_BOT_TOKEN && process.env.RENDER_EXTERNAL_URL && process
    
 //COMAND /START
 
+// En atu-mining-api/index.js
+
 bot.command('start', (ctx) => {
-    const refCode = ctx.startPayload;
-    let finalWebAppUrl = process.env.FRONTEND_URL;
-
-    // --- LÓGICA DE URL SIMPLE Y DIRECTA ---
-    if (refCode && refCode.trim() !== '') {
-        // Concatenamos directamente. Es la forma más a prueba de fallos.
-        finalWebAppUrl += `?ref=${refCode.trim()}`;
-        console.log(`[Referral-vFinal] Enlace de referido detectado. URL generada: ${finalWebAppUrl}`);
-    } else {
-        console.log(`[Referral-vFinal] No se detectó enlace de referido. Usando URL base.`);
-    }
-
+    const finalWebAppUrl = process.env.FRONTEND_URL;
     const userName = ctx.from.first_name || 'minero';
     const photoUrl = 'https://i.postimg.cc/hQtL6wsT/ATU-MINING-USDT-1.png';
     const welcomeMessage = `🎉 ¡Bienvenido a ATU Mining, ${userName}! 🎉\n\n... (tu mensaje) ...`;
