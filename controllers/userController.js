@@ -1,9 +1,8 @@
-// atu-mining-api/controllers/userController.js (VERSIÓN FINAL CON REGISTRO DE REFERIDO CORREGIDO)
+// atu-mining-api/controllers/userController.js (VERSIÓN SIMPLE Y CORRECTA)
 const User = require('../models/User');
 const ECONOMY_CONFIG = require('../config/economy');
 const Transaction = require('../models/Transaction');
 
-// --- CONSTANTES DE JUEGO (sin cambios) ---
 const CYCLE_DURATION_HOURS = 24;
 const CYCLE_DURATION_MS = CYCLE_DURATION_HOURS * 60 * 60 * 1000;
 const BASE_YIELD_PER_HOUR = 350 / 24;
@@ -11,30 +10,44 @@ const BASE_YIELD_PER_HOUR = 350 / 24;
 const syncUser = async (req, res) => {
     try {
         const { telegramId, firstName, username, photoUrl, refCode } = req.body;
-        if (!telegramId) return res.status(400).json({ message: 'Telegram ID es requerido.' });
+        if (!telegramId) {
+            return res.status(400).json({ message: 'Telegram ID es requerido.' });
+        }
         
         let user = await User.findOne({ telegramId });
-        
+        let showWelcome = false;
+
         if (!user) { // Es un usuario nuevo
-            user = new User({ telegramId, firstName, username, photoUrl, hasSeenWelcome: true });
+            console.log(`[Sync] Usuario nuevo detectado: ${telegramId}. Creando...`);
+            user = new User({
+                telegramId,
+                firstName,
+                username,
+                photoUrl,
+                hasSeenWelcome: true // Lo marcamos como visto para que el modal aparezca
+            });
+            showWelcome = true; // El modal de bienvenida solo se muestra a usuarios nuevos
 
-            // --- !! LÓGICA DE REFERIDO CORREGIDA Y ATÓMICA !! ---
+            // Si el nuevo usuario tiene un código de referido, lo asignamos.
             if (refCode) {
-                // Buscamos al referente y usamos $push para añadir al nuevo usuario a su lista de referidos.
-                // findOneAndUpdate es una operación atómica, lo que la hace más segura.
-                const referrer = await User.findOneAndUpdate(
-                    { telegramId: parseInt(refCode, 10) },
-                    { $push: { referrals: user._id } }, // Añade el ID del nuevo usuario al array 'referrals'
-                    { new: true } // Opcional: devuelve el documento del referente actualizado
-                );
-
+                const referrer = await User.findOne({ telegramId: parseInt(refCode, 10) });
                 if (referrer) {
-                    // Si se encontró y actualizó al referente, guardamos el ID del referente en el nuevo usuario.
                     user.referrerId = referrer._id;
-                    console.log(`[Referral] Usuario ${telegramId} asignado como referido de ${referrer.telegramId}`);
+                    console.log(`[Sync] Referente ${referrer.telegramId} encontrado para el nuevo usuario.`);
                 }
             }
+            // Guardamos al nuevo usuario
             await user.save();
+            
+            // --- ACTUALIZACIÓN DEL REFERENTE (Paso separado y seguro) ---
+            if (user.referrerId) {
+                await User.updateOne(
+                    { _id: user.referrerId },
+                    { $push: { referrals: user._id } }
+                );
+                console.log(`[Sync] Lista de referidos del referente actualizada.`);
+            }
+
         } else { // Es un usuario existente
             user.firstName = firstName || user.firstName;
             user.username = username || user.username;
@@ -42,18 +55,19 @@ const syncUser = async (req, res) => {
             await user.save();
         }
         
+        // Obtenemos los datos finales para enviar al frontend
         const populatedUser = await User.findById(user._id).populate({ path: 'referrals', select: 'firstName photoUrl' });
         const userObject = populatedUser.toObject();
         userObject.config = ECONOMY_CONFIG;
-        userObject.showWelcomeModal = !user.hasSeenWelcome; // La lógica de bienvenida debe estar aquí
+        userObject.showWelcomeModal = showWelcome;
         
         res.status(200).json(userObject);
+
     } catch (error) {
         console.error('Error fatal en syncUser:', error);
         res.status(500).json({ message: 'Error interno grave al sincronizar.', details: error.message });
     }
 };
-
 // --- claimRewards y getUserData (SIN CAMBIOS) ---
 
 const claimRewards = async (req, res) => {

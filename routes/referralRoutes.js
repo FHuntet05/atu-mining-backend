@@ -1,4 +1,4 @@
-// atu-mining-api/routes/referralRoutes.js (VERSIÓN FINAL Y FIABLE)
+// atu-mining-api/routes/referralRoutes.js (VERSIÓN FIABLE)
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
@@ -14,19 +14,13 @@ router.get('/:telegramId', async (req, res) => {
     try {
         const { telegramId } = req.params;
         const user = await User.findOne({ telegramId: parseInt(telegramId, 10) })
-            .populate({ // Usamos populate para traer los datos de los referidos de Nivel 1
-                path: 'referrals',
-                select: 'hasGeneratedReferralCommission _id'
-            }).lean();
+            .populate({ path: 'referrals', select: 'hasGeneratedReferralCommission _id' }).lean();
 
         if (!user) return res.status(404).json({ message: 'Usuario no encontrado.' });
         
-        // --- CONTEO Y CÁLCULO NIVEL POR NIVEL ---
         const level1Refs = user.referrals || [];
-        
         const level1Ids = level1Refs.map(u => u._id);
         const level2Refs = level1Ids.length > 0 ? await User.find({ referrerId: { $in: level1Ids } }).select('hasGeneratedReferralCommission _id').lean() : [];
-        
         const level2Ids = level2Refs.map(u => u._id);
         const level3Refs = level2Ids.length > 0 ? await User.find({ referrerId: { $in: level2Ids } }).select('hasGeneratedReferralCommission').lean() : [];
 
