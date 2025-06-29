@@ -42,44 +42,64 @@ const syncUser = async (req, res) => {
 };
 
 const claimRewards = async (req, res) => {
+    // --- SONDA DE INICIO ---
+    console.log(`[CLAIM] Petición de reclamación recibida para telegramId: ${req.body.telegramId}`);
+
     try {
         const { telegramId } = req.body;
         if (!telegramId) {
+            console.error('[CLAIM_ERROR] No se proporcionó Telegram ID.');
             return res.status(400).json({ message: 'Telegram ID es requerido.' });
         }
 
         const user = await User.findOne({ telegramId });
         if (!user) {
+            console.error(`[CLAIM_ERROR] Usuario no encontrado con ID: ${telegramId}`);
             return res.status(404).json({ message: 'Usuario no encontrado.' });
         }
+        
+        // --- SONDA DE ESTADO INICIAL ---
+        console.log(`[CLAIM] Usuario encontrado. Balance AUT actual: ${user.autBalance}. Último reclamo: ${user.lastClaim}`);
 
         const cycleDurationMs = (ECONOMY_CONFIG.CYCLE_DURATION_HOURS || 24) * 60 * 60 * 1000;
         const elapsedTime = Date.now() - new Date(user.lastClaim).getTime();
 
         if (elapsedTime < cycleDurationMs) {
+            console.warn(`[CLAIM_WARN] Intento de reclamo prematuro. Tiempo restante: ${cycleDurationMs - elapsedTime}ms`);
             return res.status(403).json({ message: 'Aún no puedes reclamar. El ciclo no ha terminado.' });
         }
         
-        // La recompensa a dar es la capacidad total del ciclo.
-        // Por ahora es fija, pero en el futuro podría incluir boosts.
         const rewardAmount = ECONOMY_CONFIG.DAILY_CLAIM_REWARD || 350;
+        
+        // --- SONDA DE CÁLCULO ---
+        console.log(`[CLAIM] Calculando recompensa. Monto: ${rewardAmount}. Tipo de dato de rewardAmount: ${typeof rewardAmount}`);
+        console.log(`[CLAIM] Tipo de dato de user.autBalance: ${typeof user.autBalance}`);
 
+        // Actualización en memoria
         user.autBalance += rewardAmount;
-        user.lastClaim = new Date(); // ¡CRUCIAL! Esto reinicia el ciclo.
+        user.lastClaim = new Date();
 
+        // --- SONDA PRE-GUARDADO ---
+        console.log(`[CLAIM] Balance actualizado en memoria. Nuevo AUT: ${user.autBalance}. Nueva fecha de reclamo: ${user.lastClaim}`);
+        
+        // El momento de la verdad
         await user.save();
 
-        // El frontend espera el objeto de usuario actualizado dentro de una clave "user".
+        // --- SONDA POST-GUARDADO ---
+        console.log('[CLAIM] ¡ÉXITO! El usuario ha sido guardado en la base de datos.');
+
         res.status(200).json({
             message: `¡Has reclamado ${rewardAmount} AUT!`,
             user: user
         });
 
     } catch (error) {
-        console.error('Error al reclamar recompensas:', error);
+        // --- SONDA DE ERROR CATASTRÓFICO ---
+        console.error('[CLAIM_FATAL_ERROR] Ha ocurrido un error en el bloque try-catch:', error);
         res.status(500).json({ message: 'Error interno del servidor.' });
     }
 };
+ 
 
 const getUserData = async (req, res) => {
     try {

@@ -8,7 +8,7 @@ const ECONOMY_CONFIG = {
     // baseYieldPerHour: 350 / 24,
     // cycleDurationHours: 24,
     DAILY_CLAIM_REWARD: 350,
-    CYCLE_DURATION_HOURS: 24,
+    CYCLE_DURATION_HOURS: 0.0028,
 };
 
 module.exports = ECONOMY_CONFIG;
