@@ -77,7 +77,8 @@ if (process.env.TELEGRAM_BOT_TOKEN && process.env.RENDER_EXTERNAL_URL && process
     });
 
     // --- COMANDO /addboost (Solo para Administradores) ---
-    bot.command('addboost', async (ctx) => {
+   // --- COMANDO /addboost (Solo para Administradores) - VERSIÓN FINAL ---
+bot.command('addboost', async (ctx) => {
     console.log(`➡️ Comando /addboost recibido del admin: ${ctx.from.id}`);
     const adminIds = (process.env.ADMIN_TELEGRAM_IDS || '').split(',');
     const userId = ctx.from.id.toString();
@@ -90,16 +91,15 @@ if (process.env.TELEGRAM_BOT_TOKEN && process.env.RENDER_EXTERNAL_URL && process
     if (parts.length !== 4) {
         return ctx.reply('Formato incorrecto. Uso: /addboost <ID_TELEGRAM_USUARIO> <ID_BOOST> <CANTIDAD>');
     }
-
-    // =========== LA CORRECCIÓN CLAVE ESTÁ AQUÍ ===========
-    // Convertimos el ID del usuario y la cantidad a NÚMEROS
+    
     const targetUserId = parseInt(parts[1], 10);
     const quantity = parseInt(parts[3], 10);
+    
+    // =========== LA CORRECCIÓN CLAVE ESTÁ AQUÍ ===========
+    // Ya NO convertimos el ID a mayúsculas. Lo tomamos tal cual.
+    const boostId = parts[2];
     // =======================================================
     
-    const boostId = parts[2].toUpperCase();
-
-    // Añadimos una validación extra para asegurarnos de que los IDs son números válidos
     if (isNaN(targetUserId)) {
         return ctx.reply('El ID de Telegram del usuario debe ser un número válido.');
     }
@@ -108,26 +108,26 @@ if (process.env.TELEGRAM_BOT_TOKEN && process.env.RENDER_EXTERNAL_URL && process
     }
     
     try {
-        // Ahora la búsqueda usará un NÚMERO, y funcionará.
         const targetUser = await User.findOne({ telegramId: targetUserId });
-        
         if (!targetUser) {
-            // Este mensaje de error ahora será 100% fiable.
             return ctx.reply(`❌ Error: No se encontró un usuario con el ID de Telegram ${targetUserId}. Asegúrate de que el usuario ha iniciado la app al menos una vez.`);
         }
 
-        // Asumo que el servicio existe y la función se llama así
-        // y que `boostService` está importado arriba
+        // Llamamos al servicio con el boostId original (ej: 'boost_lvl_1')
         await boostService.addBoostToUser(targetUser._id, boostId, quantity);
         
         ctx.reply(`✅ ¡Éxito! Se añadieron ${quantity} boost(s) de tipo "${boostId}" al usuario con ID de Telegram ${targetUserId}.`);
 
     } catch (error) {
+        // Mejoramos el mensaje de error para que sea más específico
         console.error(`Error en comando /addboost:`, error);
-        ctx.reply(`❌ Error al procesar el comando. Razón: ${error.message}`);
+        if (error.message.includes("no es válido")) {
+             ctx.reply(`❌ ${error.message}`);
+        } else {
+             ctx.reply(`❌ Error al procesar el comando. Razón: ${error.message}`);
+        }
     }
 });
-
     // --- CONFIGURACIÓN DEL WEBHOOK (MÉTODO ROBUSTO) ---
     // 1. Definimos una ruta predecible y secreta para el webhook.
     const secretPath = `/telegraf/${process.env.TELEGRAM_BOT_TOKEN}`;
