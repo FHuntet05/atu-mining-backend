@@ -1,14 +1,36 @@
-// --- START OF FILE atu-mining-backend/routes/exchangeRoutes.js (VERSIÓN CORREGIDA FINAL) ---
+// --- START OF FILE atu-mining-backend/routes/exchangeRoutes.js (VERSIÓN DE DIAGNÓSTICO) ---
 
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const ECONOMY_CONFIG = require('../config/economy');
+const mongoose = require('mongoose'); // Importante para usar tipos de Mongoose
 
 router.post('/', async (req, res) => {
     try {
         const { telegramId, autAmount } = req.body;
+        console.log(`[DIAGNÓSTICO] Datos recibidos: telegramId=${telegramId}, autAmount=${autAmount}`);
+
+        // =================================================================
+        // === PASO DE DIAGNÓSTICO: OBTENER EL ESTADO EXACTO DEL USUARIO ===
+        // =================================================================
+        const userBeforeUpdate = await User.findOne({ 
+            $or: [{ telegramId: telegramId }, { telegramId: String(telegramId) }] 
+        });
+
+        if (!userBeforeUpdate) {
+            console.error('[DIAGNÓSTICO] ERROR CRÍTICO: El usuario no fue encontrado NI SIQUIERA con la búsqueda simple.');
+            return res.status(404).json({ message: 'Usuario no encontrado.' });
+        }
+
+        // ¡ESTE ES EL LOG MÁS IMPORTANTE!
+        console.log('[DIAGNÓSTICO] Estado del usuario ANTES de la operación:', JSON.stringify(userBeforeUpdate, null, 2));
+        console.log(`[DIAGNÓSTICO] Tipo de dato de autBalance en la DB: ${userBeforeUpdate.autBalance.constructor.name}`);
+        console.log(`[DIAGNÓSTICO] Monto a intercambiar: ${autAmount}, Tipo: ${typeof autAmount}`);
+        // =================================================================
+        
+
         const amountToExchange = parseFloat(autAmount);
         
         if (!telegramId || !amountToExchange || isNaN(amountToExchange) || amountToExchange <= 0) {
@@ -21,14 +43,11 @@ router.post('/', async (req, res) => {
         }
         
         const usdtToAdd = parseFloat(usdtEquivalent.toFixed(6));
-        const userIdString = String(telegramId); // Convertimos a string para la búsqueda
+        const userIdString = String(telegramId);
 
-        // --- BÚSQUEDA FLEXIBLE Y OPERACIÓN ATÓMICA ---
         const updatedUser = await User.findOneAndUpdate(
             { 
-                // Buscamos el ID como número O como string
                 $or: [{ telegramId: telegramId }, { telegramId: userIdString }],
-                // La condición del balance sigue igual
                 autBalance: { $gte: amountToExchange }
             },
             { 
@@ -41,29 +60,18 @@ router.post('/', async (req, res) => {
         );
 
         if (!updatedUser) {
-            return res.status(400).json({ message: 'No tienes suficientes AUT para intercambiar o el usuario no fue encontrado.' });
-        }
-
-        try {
-            await Transaction.create({
-                userId: updatedUser._id,
-                type: 'exchange',
-                currency: 'USDT',
-                amount: usdtToAdd,
-                status: 'completed',
-                details: `Intercambio de ${amountToExchange.toLocaleString()} AUT`
-            });
-        } catch (transactionError) {
-            console.error("Error al crear el registro de la transacción de intercambio:", transactionError);
+            // Este es el punto donde probablemente falla.
+            console.error('[DIAGNÓSTICO] La operación findOneAndUpdate falló. updatedUser es null.');
+            return res.status(400).json({ message: 'La condición de intercambio no se cumplió (probablemente saldo insuficiente o error de tipo).' });
         }
         
         res.status(200).json({ message: '¡Intercambio realizado con éxito!', user: updatedUser });
 
     } catch (error) {
-        console.error("Error fatal en el intercambio:", error);
+        console.error("[DIAGNÓSTICO] Ha ocurrido un error fatal en el bloque try-catch:", error);
         res.status(500).json({ message: 'Error interno del servidor.' });
     }
 });
 
 module.exports = router;
-// --- END OF FILE atu-mining-backend/routes/exchangeRoutes.js (VERSIÓN CORREGIDA FINAL) ---
+// --- END OF FILE atu-mining-backend/routes/exchangeRoutes.js (VERSIÓN DE DIAGNÓSTICO) ---
