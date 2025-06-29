@@ -79,46 +79,33 @@ if (process.env.TELEGRAM_BOT_TOKEN && process.env.RENDER_EXTERNAL_URL && process
     app.set('bot', bot);
     bot.use(Telegraf.log());
    
+//COMAND /START
 
-    // --- COMANDO /start ---
-    bot.command('start', (ctx) => {
-         const refCode = ctx.startPayload; 
-    let url = process.env.FRONTEND_URL;
+bot.command('start', (ctx) => {
+    const refCode = ctx.startPayload;
+    let finalWebAppUrl = process.env.FRONTEND_URL;
 
-     if (refCode) {
-        url += `?ref=${refCode}`;
+    // --- LÓGICA DE URL SIMPLE Y DIRECTA ---
+    if (refCode && refCode.trim() !== '') {
+        // Concatenamos directamente. Es la forma más a prueba de fallos.
+        finalWebAppUrl += `?ref=${refCode.trim()}`;
+        console.log(`[Referral-vFinal] Enlace de referido detectado. URL generada: ${finalWebAppUrl}`);
+    } else {
+        console.log(`[Referral-vFinal] No se detectó enlace de referido. Usando URL base.`);
     }
 
-        // Usamos el nombre del usuario para personalizar el saludo
-        const userName = ctx.from.first_name || 'minero';
-        const photoUrl = 'https://i.postimg.cc/hQtL6wsT/ATU-MINING-USDT-1.png'; // URL de tu imagen
+    const userName = ctx.from.first_name || 'minero';
+    const photoUrl = 'https://i.postimg.cc/hQtL6wsT/ATU-MINING-USDT-1.png';
+    const welcomeMessage = `🎉 ¡Bienvenido a ATU Mining, ${userName}! 🎉\n\n... (tu mensaje) ...`;
 
-        const welcomeMessage = 
-`🎉 ¡Bienvenido a ATU Mining, ${userName}! 🎉
-
-Prepárate para sumergirte en el mundo de la minería de criptomonedas.
-
-🤖 *Tu misión es:*
-⛏️  Minar el token del juego, AUT, de forma automática.
-💎  Mejorar tu equipo con Boosts para acelerar tu producción.
-💰  Intercambiar tus AUT por USDT y retirarlos.
-
-¡Construye tu imperio minero y compite para llegar a la cima del ranking!
-
-👇 Haz clic en el botón de abajo para empezar a minar.`;
-
-        // Enviamos la foto con el texto y el botón
-        ctx.replyWithPhoto(photoUrl, {
-            caption: welcomeMessage,
-            parse_mode: 'Markdown',
-            reply_markup: {
-                inline_keyboard: [[{ 
-                    text: '⛏️ Minar Ahora', // Texto del botón
-                    web_app: { url } 
-                }]]
-            }
-        });
+    ctx.replyWithPhoto(photoUrl, {
+        caption: welcomeMessage,
+        parse_mode: 'Markdown',
+        reply_markup: {
+            inline_keyboard: [[{ text: '⛏️ Minar Ahora', web_app: { url: finalWebAppUrl } }]]
+        }
     });
+});
 
     // --- COMANDO /addboost ---
     bot.command('addboost', async (ctx) => {
