@@ -61,7 +61,7 @@ const claimRewards = async (req, res) => {
         // --- SONDA DE ESTADO INICIAL ---
         console.log(`[CLAIM] Usuario encontrado. Balance AUT actual: ${user.autBalance}. Último reclamo: ${user.lastClaim}`);
 //AQUUIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-        const cycleDurationMs =10 * 1000;
+        const CYCLE_DURATION_MS = CYCLE_DURATION_HOURS * 60 * 60 * 1000;
         const elapsedTime = Date.now() - new Date(user.lastClaim).getTime();
 
         if (elapsedTime < cycleDurationMs) {
