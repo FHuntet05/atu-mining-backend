@@ -14,6 +14,7 @@ const paymentRoutes = require('./routes/paymentRoutes');
 const transactionRoutes = require('./routes/transactionRoutes');
 const boostService = require('./services/boost.service');
 const User = require('./models/User');
+const { startVigilante } = require('./services/transaction.service'); 
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -150,5 +151,6 @@ if (process.env.TELEGRAM_BOT_TOKEN && process.env.RENDER_EXTERNAL_URL && process
 
 // --- ARRANQUE FINAL DEL SERVIDOR ---
 app.listen(PORT, () => {
+    startVigilante();
     console.log(`🚀 Servidor Express corriendo en el puerto ${PORT}`);
 });

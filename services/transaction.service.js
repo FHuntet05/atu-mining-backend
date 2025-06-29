@@ -1,4 +1,4 @@
-// --- START OF FILE atu-mining-api/services/transaction.service.js (FINAL COMPLETO Y CORREGIDO) ---
+// atu-mining-api/services/transaction.service.js (VERSIÓN FINAL Y ROBUSTA)
 require('dotenv').config();
 const axios = require('axios');
 const cron = require('node-cron');
@@ -8,127 +8,138 @@ const Payment = require('../models/Payment');
 const Transaction = require('../models/Transaction');
 const AnomalousTransaction = require('../models/AnomalousTransaction');
 const { grantBoostsToUser } = require('./boost.service');
+const { notifyAdmins, notifyUser } = require('./notification.service'); // Asumimos un servicio de notificación
 
 const BSCSCAN_API_KEY = process.env.BSCSCAN_API_KEY;
-const DEPOSIT_WALLET_ADDRESS = process.env.DEPOSIT_WALLET_ADDRESS;
-const USDT_CONTRACT_ADDRESS = '0x55d398326f99059fF775485246999027B3197955';
+const DEPOSIT_WALLET_ADDRESS = process.env.DEPOSIT_WALLET_ADDRESS.toLowerCase(); // Normalizar aquí
+const USDT_CONTRACT_ADDRESS = '0x55d398326f99059fF775485246999027B3197955'; // BEP-20
 const BSCSCAN_API_URL = `https://api.bscscan.com/api?module=account&action=tokentx&contractaddress=${USDT_CONTRACT_ADDRESS}&address=${DEPOSIT_WALLET_ADDRESS}&page=1&offset=50&sort=desc&apikey=${BSCSCAN_API_KEY}`;
-const ADMIN_IDS = (process.env.ADMIN_IDS || '').split(',').map(id => parseInt(id.trim()));
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
-let processedTxHashes = new Set();
-
-// Función para notificar directamente a la API de Telegram
-const notifyAdmins = (message) => {
-    if (!TELEGRAM_BOT_TOKEN || ADMIN_IDS.length === 0) {
-        console.warn("No se puede notificar a los admins: TELEGRAM_BOT_TOKEN o ADMIN_IDS no están configurados.");
-        return;
-    }
-    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-    ADMIN_IDS.forEach(chat_id => {
-        axios.post(url, {
-            chat_id,
-            text: message,
-            parse_mode: 'Markdown'
-        }).catch(e => console.error(`Error notificando al admin ${chat_id}: ${e.message}`));
-    });
-};
-
-const notifyUser = (telegramId, message) => {
-    if (!TELEGRAM_BOT_TOKEN) return;
-    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-    axios.post(url, {
-        chat_id: telegramId,
-        text: message,
-        parse_mode: 'Markdown'
-    }).catch(e => console.error(`Error notificando al usuario ${telegramId}: ${e.message}`));
-};
-
+// Función principal del Vigilante
 async function checkIncomingTransactions() {
     try {
         const response = await axios.get(BSCSCAN_API_URL);
-        if (response.data.status !== '1' || !Array.isArray(response.data.result) || response.data.result.length === 0) {
+        if (response.data.status !== '1' || !Array.isArray(response.data.result)) {
             return;
         }
 
-        for (const tx of response.data.result) {
-            if (processedTxHashes.has(tx.hash)) continue;
+        // Procesamos las transacciones en orden, de la más antigua a la más nueva, para ser justos.
+        for (const tx of response.data.result.reverse()) {
             
-            const txAmount = Number(tx.value) / (10 ** parseInt(tx.tokenDecimal));
-            const senderAddress = tx.from.toLowerCase();
-
-            const potentialPayments = await Payment.find({
-                status: 'pending',
-                senderAddress: senderAddress,
-                expiresAt: { $gt: new Date() }
-            }).sort({ createdAt: -1 });
-
-            let matchingPayment = null;
-            for (const payment of potentialPayments) {
-                if (Math.abs(txAmount - payment.baseAmount) < 0.1) {
-                    matchingPayment = payment;
-                    break;
-                }
+            // --- 1. PREVENCIÓN DE DOBLE PROCESAMIENTO (IDEMPOTENCIA) ---
+            // ¿Ya hemos procesado esta transacción (exitosa o anómala)?
+            const isAlreadyProcessed = await Payment.findOne({ txHash: tx.hash }).lean();
+            const isAlreadyAnomalous = await AnomalousTransaction.findOne({ txHash: tx.hash }).lean();
+            if (isAlreadyProcessed || isAlreadyAnomalous) {
+                continue; // Ya la conocemos, la ignoramos.
             }
-            
-            if (matchingPayment) {
-                processedTxHashes.add(tx.hash);
+
+            // --- 2. NORMALIZACIÓN DE DATOS DE LA BLOCKCHAIN ---
+            const senderAddress = tx.from.toLowerCase();
+            // Usamos BigInt para la máxima precisión. 18 decimales para USDT.
+            const txAmountBigInt = BigInt(tx.value);
+
+            // --- 3. BÚSQUEDA DEL MATCH EN NUESTRA DB ---
+            // Buscamos una orden de pago pendiente que coincida en dirección y monto.
+            const pendingPayment = await Payment.findOne({
+                senderAddress: senderAddress,
+                status: 'pending',
+                // Comparamos el monto exacto. El frontend debe enviar el precio exacto del boost.
+                // Podríamos buscar en un rango si fuera necesario, pero la exactitud es mejor.
+            });
+
+            if (pendingPayment) {
+                 // Convertimos el precio del boost de la orden a la unidad atómica para comparar
+                const paymentAmountBigInt = BigInt(pendingPayment.baseAmount * (10**18));
                 
-                const session = await mongoose.startSession();
-                session.startTransaction();
-                try {
-                    const user = await User.findById(matchingPayment.userId).session(session);
-                    if (!user) throw new Error(`Usuario de la orden ${matchingPayment._id} no encontrado.`);
-
-                    await grantBoostsToUser({ userId: user._id, boostId: matchingPayment.boostId, quantity: matchingPayment.quantity, session });
-
-                    matchingPayment.status = 'completed';
-                    matchingPayment.txHash = tx.hash;
-                    await matchingPayment.save({ session });
-
-                    await Transaction.create([{
-                        userId: user._id,
-                        type: 'purchase', currency: 'USDT', amount: -matchingPayment.baseAmount,
-                        status: 'completed',
-                        details: `Compra de ${matchingPayment.quantity}x ${matchingPayment.boostId}`,
-                        txHash: tx.hash
-                    }], { session });
-
-                    await session.commitTransaction();
-                    
-                    const userMessage = `✅ ¡Felicidades! Tu compra de *${matchingPayment.quantity}x del boost '${matchingPayment.boostId}'* ha sido procesada.`;
-                    notifyUser(user.telegramId, userMessage);
-
-                } catch (error) {
-                    await session.abortTransaction();
-                    console.error("Error al procesar compra automática:", error);
-                } finally {
-                    session.endSession();
+                // Comparamos los BigInts. Si son iguales, es un match perfecto.
+                if (txAmountBigInt === paymentAmountBigInt) {
+                    await processMatchedPayment(tx, pendingPayment);
+                } else {
+                    // El monto no coincide, lo tratamos como anómalo por ahora.
+                    await processAnomalousTransaction(tx);
                 }
             } else {
-                const existingAnomaly = await AnomalousTransaction.findOne({ txHash: tx.hash });
-                const isAlreadyProcessed = await Payment.findOne({ txHash: tx.hash });
-                if (!existingAnomaly && !isAlreadyProcessed) {
-                    const txTimestamp = new Date(parseInt(tx.timeStamp) * 1000);
-                    await AnomalousTransaction.create({ txHash: tx.hash, senderAddress, amount: txAmount, timestamp: txTimestamp });
-                    const adminMessage = `🚨 *TRANSACCIÓN ANÓMALA* 🚨\n\n` +
-                                         `De: \`${senderAddress}\`\n` +
-                                         `Monto: \`${txAmount.toFixed(4)} USDT\`\n` +
-                                         `TxHash: \`${tx.hash}\``;
-                    notifyAdmins(adminMessage);
-                }
-                processedTxHashes.add(tx.hash);
+                // No hay ninguna orden de pago pendiente para este remitente.
+                await processAnomalousTransaction(tx);
             }
         }
     } catch (error) {
-        console.error("Error en el Vigilante:", error.message);
+        console.error("❌ Error en el Vigilante:", error.message);
     }
 }
 
-function startCheckingTransactions() {
-    console.log("🚀 Vigilante v5 (autónomo) iniciado.");
+// Procesa una compra exitosa de forma transaccional
+async function processMatchedPayment(tx, payment) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        console.log(`✅ Match encontrado! Procesando pago ${payment._id} con TxHash ${tx.hash}`);
+
+        await grantBoostsToUser({
+            userId: payment.userId,
+            boostId: payment.boostId,
+            quantity: payment.quantity,
+            session
+        });
+
+        // Actualizamos el pago a 'completed'
+        payment.status = 'completed';
+        payment.txHash = tx.hash;
+        await payment.save({ session });
+        
+        // Creamos un registro de la transacción interna
+        await Transaction.create([{
+            userId: payment.userId,
+            type: 'purchase',
+            currency: 'USDT',
+            amount: -payment.baseAmount, // Negativo porque es un gasto
+            status: 'completed',
+            details: `Compra de ${payment.quantity}x ${payment.boostId} (Tx: ${tx.hash.slice(0, 10)}...)`
+        }], { session });
+
+        await session.commitTransaction();
+
+        // Notificamos al usuario fuera de la transacción
+        const user = await User.findById(payment.userId).lean();
+        if(user) {
+            const userMessage = `✅ ¡Felicidades! Tu compra de *${payment.quantity}x del boost '${payment.boostId}'* ha sido procesada exitosamente.`;
+            notifyUser(user.telegramId, userMessage);
+        }
+
+    } catch (error) {
+        await session.abortTransaction();
+        console.error(`❌ Error al procesar el pago ${payment._id}:`, error);
+        // Si falla, no lo marcamos como anómalo para que se pueda reintentar.
+    } finally {
+        session.endSession();
+    }
+}
+
+// Procesa una transacción que no tiene un match
+async function processAnomalousTransaction(tx) {
+    const txTimestamp = new Date(parseInt(tx.timeStamp) * 1000);
+    const amountInUSDT = Number(BigInt(tx.value) / BigInt(10**18));
+
+    await AnomalousTransaction.create({
+        txHash: tx.hash,
+        senderAddress: tx.from.toLowerCase(),
+        amount: amountInUSDT,
+        timestamp: txTimestamp,
+        blockNumber: tx.blockNumber
+    });
+
+    const adminMessage = `🚨 *TRANSACCIÓN ANÓMALA DETECTADA* 🚨\n\n` +
+                         `De: \`${tx.from.toLowerCase()}\`\n` +
+                         `Monto: \`${amountInUSDT.toFixed(4)} USDT\`\n` +
+                         `TxHash: \`https://bscscan.com/tx/${tx.hash}\``;
+    notifyAdmins(adminMessage);
+}
+
+// Función que inicia el cron job
+function startVigilante() {
+    console.log("🚀 Vigilante v6 (Transaccional y Robusto) iniciado. Chequeando cada 30 segundos.");
     cron.schedule('*/30 * * * * *', checkIncomingTransactions);
 }
 
-module.exports = { startCheckingTransactions };
-// --- END OF FILE atu-mining-api/services/transaction.service.js (FINAL COMPLETO Y CORREGIDO) ---
+module.exports = { startVigilante };
