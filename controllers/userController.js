@@ -10,33 +10,27 @@ const BASE_YIELD_PER_HOUR = 350 / 24;
 
 const syncUser = async (req, res) => {
     try {
-        // --- ESPÍA 4 ---
-        console.log('[Referral-Debug/Paso5] El endpoint /sync recibió este body:', req.body);
-        
         const { telegramId, firstName, username, photoUrl, refCode } = req.body;
-        if (!telegramId) return res.status(400).json({ message: 'Telegram ID es requerido.' });
+        if (!telegramId) {
+            return res.status(400).json({ message: 'Telegram ID es requerido.' });
+        }
         
         let user = await User.findOne({ telegramId });
-        if (!user) {
-            console.log(`[Referral-Debug/Paso6] Es un usuario nuevo. ID: ${telegramId}`);
+        let isNewUser = !user;
+
+        if (isNewUser) {
             user = new User({ telegramId, firstName, username, photoUrl });
-            
+            // --- LÓGICA DE REFERIDO ---
             if (refCode) {
-                console.log(`[Referral-Debug/Paso7] El usuario nuevo tiene un refCode: ${refCode}. Buscando al referente...`);
                 const referrer = await User.findOne({ telegramId: parseInt(refCode, 10) });
-                
                 if (referrer) {
-                    console.log(`[Referral-Debug/Paso8] Referente encontrado (ID: ${referrer.telegramId}). Asignando...`);
                     user.referrerId = referrer._id;
+                    // Añadimos el nuevo usuario a la lista de referidos del referente
                     referrer.referrals.push(user._id);
                     await referrer.save();
-                    console.log(`[Referral-Debug/Paso9] Referente guardado con el nuevo referido.`);
-                } else {
-                    console.log(`[Referral-Debug/Paso8-Error] No se encontró un referente con el ID: ${refCode}.`);
                 }
             }
         } else {
-             console.log(`[Referral-Debug/Paso6] Es un usuario existente. ID: ${telegramId}`);
             user.firstName = firstName || user.firstName;
             user.username = username || user.username;
             user.photoUrl = photoUrl || user.photoUrl;
@@ -58,8 +52,8 @@ const syncUser = async (req, res) => {
         
         res.status(200).json(userObject);
     } catch (error) {
-        console.error('❌ [Referral-Debug] Error fatal en syncUser:', error);
-        res.status(500).json({ message: 'Error interno grave.', details: error.message });
+        console.error('Error fatal en syncUser:', error);
+        res.status(500).json({ message: 'Error interno grave al sincronizar el usuario.', details: error.message });
     }
 };
 
