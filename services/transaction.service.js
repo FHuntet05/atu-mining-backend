@@ -23,27 +23,39 @@ async function checkIncomingTransactions() {
         }
 
         for (const tx of response.data.result.reverse()) {
-            // 1. PREVENCIÓN DE DOBLE PROCESAMIENTO
-            const isAlreadyProcessed = await Payment.exists({ txHash: tx.hash });
-            const isAlreadyAnomalous = await AnomalousTransaction.exists({ txHash: tx.hash });
-            if (isAlreadyProcessed || isAlreadyAnomalous) {
-                continue;
-            }
+            // Prevenimos doble procesamiento
+            const isProcessed = await Payment.exists({ txHash: tx.hash }) || await AnomalousTransaction.exists({ txHash: tx.hash });
+            if (isProcessed) continue;
 
-            // 2. NORMALIZACIÓN Y PREPARACIÓN
-            const senderAddress = tx.from.toLowerCase();
-            const txAmountInUSDT = Number(BigInt(tx.value) / BigInt(10**18));
+            // ================== INICIO DE LA TELEMETRÍA FORENSE ==================
+            console.log("\n\n--- [V8] Analizando Nueva Transacción ---");
+            console.log(`[V8] Tx Hash: ${tx.hash}`);
 
-            // ============ LA LÍNEA DE CÓDIGO FINAL Y MÁS IMPORTANTE ============
-            // Buscamos una orden de pago que coincida EXACTAMENTE en dirección y monto.
-            // Esto es mucho más eficiente y preciso que buscar primero y comparar después.
-            const matchingPayment = await Payment.findOne({
+            // 1. Datos Crudos de BscScan
+            const rawSenderAddress = tx.from;
+            const rawValue = tx.value;
+            console.log(`[V8] Datos CRUDOS -> Remitente: ${rawSenderAddress}, Valor: ${rawValue}`);
+
+            // 2. Datos Normalizados
+            const senderAddress = rawSenderAddress.toLowerCase();
+            const txAmountInUSDT = Number(BigInt(rawValue) / BigInt(10**18));
+            console.log(`[V8] Datos NORMALIZADOS -> Remitente: ${senderAddress}, Monto USDT: ${txAmountInUSDT} (Tipo: ${typeof txAmountInUSDT})`);
+
+            // 3. Objeto de Búsqueda que se usará
+            const query = {
                 senderAddress: senderAddress,
-                baseAmount: txAmountInUSDT, // Comparamos directamente el valor en USDT
+                baseAmount: txAmountInUSDT,
                 status: 'pending'
-            });
-            // ===================================================================
+            };
+            console.log(`[V8] Objeto de BÚSQUEDA para MongoDB:`, JSON.stringify(query, null, 2));
+            // ====================================================================
 
+            const matchingPayment = await Payment.findOne(query);
+
+            // 4. Resultado de la Búsqueda
+            console.log(`[V8] Resultado de la Búsqueda:`, matchingPayment ? `ENCONTRADO (ID: ${matchingPayment._id})` : 'NO ENCONTRADO (null)');
+            console.log("-----------------------------------------");
+            
             if (matchingPayment) {
                 await processMatchedPayment(tx, matchingPayment);
             } else {
@@ -51,9 +63,10 @@ async function checkIncomingTransactions() {
             }
         }
     } catch (error) {
-        console.error("❌ Error en el Vigilante:", error.message);
+        console.error("❌ [V8] Error CRÍTICO en el Vigilante:", error);
     }
 }
+
 
 // Procesa una compra exitosa de forma transaccional (SIN CAMBIOS)
 async function processMatchedPayment(tx, payment) {
