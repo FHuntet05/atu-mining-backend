@@ -15,6 +15,7 @@ const transactionRoutes = require('./routes/transactionRoutes');
 const boostService = require('./services/boost.service');
 const User = require('./models/User');
 const { startVigilante } = require('./services/transaction.service'); 
+const configRoutes = require('./routes/configRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -60,6 +61,7 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/referrals', referralRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/transactions', transactionRoutes);
+app.use('/api/config', configRoutes);
 
 
 // =================================================================
