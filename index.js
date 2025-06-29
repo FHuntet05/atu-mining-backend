@@ -78,40 +78,55 @@ if (process.env.TELEGRAM_BOT_TOKEN && process.env.RENDER_EXTERNAL_URL && process
 
     // --- COMANDO /addboost (Solo para Administradores) ---
     bot.command('addboost', async (ctx) => {
-        console.log(`➡️ Comando /addboost recibido del admin: ${ctx.from.id}`);
-        const adminIds = (process.env.ADMIN_TELEGRAM_IDS || '').split(',');
-        const userId = ctx.from.id.toString();
+    console.log(`➡️ Comando /addboost recibido del admin: ${ctx.from.id}`);
+    const adminIds = (process.env.ADMIN_TELEGRAM_IDS || '').split(',');
+    const userId = ctx.from.id.toString();
 
-        if (!adminIds.includes(userId)) {
-            return ctx.reply('❌ Acceso denegado. Este comando es solo para administradores.');
-        }
+    if (!adminIds.includes(userId)) {
+        return ctx.reply('❌ Acceso denegado. Este comando es solo para administradores.');
+    }
 
-        const parts = ctx.message.text.split(' ');
-        if (parts.length !== 4) {
-            return ctx.reply('Formato incorrecto. Uso: /addboost <ID_TELEGRAM_USUARIO> <ID_BOOST> <CANTIDAD>');
-        }
+    const parts = ctx.message.text.split(' ');
+    if (parts.length !== 4) {
+        return ctx.reply('Formato incorrecto. Uso: /addboost <ID_TELEGRAM_USUARIO> <ID_BOOST> <CANTIDAD>');
+    }
 
-        const targetUserId = parts[1];
-        const boostId = parts[2].toUpperCase();
-        const quantity = parseInt(parts[3], 10);
+    // =========== LA CORRECCIÓN CLAVE ESTÁ AQUÍ ===========
+    // Convertimos el ID del usuario y la cantidad a NÚMEROS
+    const targetUserId = parseInt(parts[1], 10);
+    const quantity = parseInt(parts[3], 10);
+    // =======================================================
+    
+    const boostId = parts[2].toUpperCase();
 
-        if (isNaN(quantity) || quantity <= 0) {
-            return ctx.reply('La cantidad debe ser un número positivo.');
-        }
+    // Añadimos una validación extra para asegurarnos de que los IDs son números válidos
+    if (isNaN(targetUserId)) {
+        return ctx.reply('El ID de Telegram del usuario debe ser un número válido.');
+    }
+    if (isNaN(quantity) || quantity <= 0) {
+        return ctx.reply('La cantidad debe ser un número positivo.');
+    }
+    
+    try {
+        // Ahora la búsqueda usará un NÚMERO, y funcionará.
+        const targetUser = await User.findOne({ telegramId: targetUserId });
         
-        try {
-            const targetUser = await User.findOne({ telegramId: targetUserId });
-            if (!targetUser) {
-                return ctx.reply(`❌ Error: No se encontró un usuario con el ID de Telegram ${targetUserId}.`);
-            }
-            // Asumo que el servicio existe y la función se llama así
-            await boostService.addBoostToUser(targetUser._id, boostId, quantity);
-            ctx.reply(`✅ ¡Éxito! Se añadieron ${quantity} boost(s) de tipo "${boostId}" al usuario con ID de Telegram ${targetUserId}.`);
-        } catch (error) {
-            console.error(`Error en comando /addboost:`, error);
-            ctx.reply(`❌ Error al procesar el comando. Razón: ${error.message}`);
+        if (!targetUser) {
+            // Este mensaje de error ahora será 100% fiable.
+            return ctx.reply(`❌ Error: No se encontró un usuario con el ID de Telegram ${targetUserId}. Asegúrate de que el usuario ha iniciado la app al menos una vez.`);
         }
-    });
+
+        // Asumo que el servicio existe y la función se llama así
+        // y que `boostService` está importado arriba
+        await boostService.addBoostToUser(targetUser._id, boostId, quantity);
+        
+        ctx.reply(`✅ ¡Éxito! Se añadieron ${quantity} boost(s) de tipo "${boostId}" al usuario con ID de Telegram ${targetUserId}.`);
+
+    } catch (error) {
+        console.error(`Error en comando /addboost:`, error);
+        ctx.reply(`❌ Error al procesar el comando. Razón: ${error.message}`);
+    }
+});
 
     // --- CONFIGURACIÓN DEL WEBHOOK (MÉTODO ROBUSTO) ---
     // 1. Definimos una ruta predecible y secreta para el webhook.
