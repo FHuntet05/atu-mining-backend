@@ -1,8 +1,7 @@
-// --- START OF FILE atu-mining-api/routes/withdrawalRoutes.js (CORREGIDO Y BLINDADO) ---
+// --- START OF FILE atu-mining-api/routes/withdrawalRoutes.js (VERSIÓN FINAL CON NOTIFICACIÓN ENRIQUECIDA) ---
 
 const express = require('express');
 const router = express.Router();
-const mongoose = require('mongoose');
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const ECONOMY_CONFIG = require('../config/economy');
@@ -14,7 +13,7 @@ router.post('/request', async (req, res) => {
         const { telegramId, amount, walletAddress } = req.body;
         const withdrawalAmount = parseFloat(amount);
 
-        // --- VALIDACIONES INICIALES (SIN CAMBIOS, SON CORRECTAS) ---
+        // --- VALIDACIONES INICIALES ---
         if (!telegramId || !withdrawalAmount || !walletAddress || isNaN(withdrawalAmount) || withdrawalAmount <= 0) {
             return res.status(400).json({ message: 'Faltan datos en la solicitud.' });
         }
@@ -25,64 +24,69 @@ router.post('/request', async (req, res) => {
             return res.status(400).json({ message: `El monto mínimo de retiro es ${ECONOMY_CONFIG.minWithdrawalUsdt} USDT.` });
         }
 
-        // --- OPERACIÓN ATÓMICA Y VERIFICACIÓN DE COOLDOWN EN UN SOLO PASO ---
+        // --- PASO 1: OPERACIÓN ATÓMICA DE RETIRO (rápida y segura) ---
         const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-
         const updatedUser = await User.findOneAndUpdate(
             {
-                telegramId: telegramId,
+                $or: [{ telegramId: telegramId }, { telegramId: String(telegramId) }],
                 usdtBalance: { $gte: withdrawalAmount },
-                // Condición: el último retiro fue hace más de 24h O nunca ha habido uno
-                $or: [
-                    { lastWithdrawalRequest: { $lte: twentyFourHoursAgo } },
-                    { lastWithdrawalRequest: null }
-                ]
+                $or: [{ lastWithdrawalRequest: { $lte: twentyFourHoursAgo } }, { lastWithdrawalRequest: null }]
             },
             {
                 $inc: { usdtBalance: -withdrawalAmount },
                 $set: { lastWithdrawalRequest: new Date() }
             },
-            { new: true } // Devuelve el documento actualizado
+            { new: true }
         );
 
-        // Si updatedUser es null, una de las condiciones falló
         if (!updatedUser) {
-            // Verificamos por qué falló para dar un mensaje de error más útil
-            const existingUser = await User.findOne({ telegramId });
+            const existingUser = await User.findOne({ $or: [{ telegramId: telegramId }, { telegramId: String(telegramId) }] });
             if (!existingUser) return res.status(404).json({ message: 'Usuario no encontrado.' });
             if (existingUser.usdtBalance < withdrawalAmount) return res.status(400).json({ message: 'Fondos insuficientes.' });
             return res.status(429).json({ message: 'Debes esperar 24 horas desde tu última solicitud.' });
         }
 
-        // --- CREACIÓN DE TRANSACCIÓN (YA NO NECESITA SESIÓN) ---
+        // --- CREACIÓN DE TRANSACCIÓN ---
         await Transaction.create({
-            userId: updatedUser._id,
-            type: 'withdrawal_request',
-            currency: 'USDT',
-            amount: -withdrawalAmount, // Mantenemos el negativo para indicar salida
-            status: 'pending',
+            userId: updatedUser._id, type: 'withdrawal_request', currency: 'USDT',
+            amount: -withdrawalAmount, status: 'pending',
             details: `Solicitud de retiro a la billetera: ${walletAddress}`
         });
 
-        // --- NOTIFICACIÓN A ADMINS (A PRUEBA DE FALLOS) ---
+        // --- PASO 2: OBTENER DATOS RICOS PARA LA NOTIFICACIÓN ---
+        // Hacemos una segunda consulta para obtener toda la información que queremos mostrar.
+        const userForNotification = await User.findById(updatedUser._id).populate('referrals');
+
+        // --- PASO 3: CONSTRUIR EL MENSAJE DETALLADO ---
         try {
             const bot = req.app.get('bot');
-            if (bot && ADMIN_IDS.length > 0) {
-                const adminMessage = `🚨 *Nueva Solicitud de Retiro* 🚨\n\n` +
-                                   `*Usuario:* ${updatedUser.firstName || 'N/A'} (\`${updatedUser.telegramId}\`)\n` +
-                                   `*Monto:* *${withdrawalAmount.toFixed(2)} USDT*\n` +
-                                   `*Billetera:* \`${walletAddress}\``;
+            if (bot && ADMIN_IDS.length > 0 && userForNotification) {
+                const adminMessage = 
+`🚨 *Nueva Solicitud de Retiro* 🚨
+
+*Detalles del Solicitante:*
+- *Nombre:* ${userForNotification.firstName || 'N/A'}
+- *Usuario:* @${userForNotification.username || 'N/A'}
+- *ID:* \`${userForNotification.telegramId}\`
+
+*Detalles de la Transacción:*
+- *Monto a Retirar:* *${withdrawalAmount.toFixed(2)} USDT*
+- *Billetera (BEP20):* \`${walletAddress}\`
+
+*Métricas del Usuario:*
+- *Total Minado:* ${(userForNotification.totalMinedAUT || 0).toLocaleString()} AUT
+- *Cantidad de Referidos:* ${userForNotification.referrals?.length || 0}`;
                 
-                // Usamos Promise.allSettled para no detener el proceso si un mensaje falla
+                // --- PASO 4: ENVIAR NOTIFICACIÓN A PRUEBA DE FALLOS ---
                 await Promise.allSettled(
                     ADMIN_IDS.map(adminId => bot.telegram.sendMessage(adminId, adminMessage, { parse_mode: 'Markdown' }))
                 );
             }
         } catch (notificationError) {
-            // Si la notificación falla, solo lo registramos, pero no rompemos el flujo del usuario.
-            console.error("Error al enviar notificación de retiro a admins:", notificationError);
+            console.error("Error al construir o enviar la notificación de retiro:", notificationError);
         }
         
+        // Respondemos al usuario con éxito. La notificación es una tarea de fondo.
         res.status(200).json({
             message: 'Tu solicitud de retiro ha sido enviada y está en revisión.',
             user: updatedUser
@@ -95,4 +99,4 @@ router.post('/request', async (req, res) => {
 });
 
 module.exports = router;
-// --- END OF FILE atu-mining-api/routes/withdrawalRoutes.js (CORREGIDO Y BLINDADO) ---
+// --- END OF FILE atu-mining-api/routes/withdrawalRoutes.js (VERSIÓN FINAL CON NOTIFICACIÓN ENRIQUECIDA) ---
