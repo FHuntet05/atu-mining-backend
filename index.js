@@ -42,25 +42,6 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
-
-// --- AÑADE ESTE BLOQUE DE DEPURACIÓN AQUÍ MISMO ---
-app.use((req, res, next) => {
-    console.log(`[REQUEST LOGGER] --- Nueva Petición ---`);
-    console.log(`[REQUEST LOGGER] Método: ${req.method}`);
-    console.log(`[REQUEST LOGGER] URL: ${req.originalUrl}`);
-    console.log(`[REQUEST LOGGER] Headers:`, req.headers);
-    if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
-        console.log(`[REQUEST LOGGER] Cuerpo (Body):`, req.body);
-    }
-    console.log(`[REQUEST LOGGER] --- Fin de la Petición ---`);
-    next(); // ¡Muy importante! Pasa la petición a la siguiente ruta.
-});
-// --- FIN DEL BLOQUE DE DEPURACIÓN ---
-
-
-
-
-
 // --- CONEXIÓN A MONGODB ---
 mongoose.connect(process.env.MONGODB_URI)
     .then(() => console.log('✅ Successfully connected to MongoDB Atlas'))
