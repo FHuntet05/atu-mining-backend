@@ -41,6 +41,46 @@ const syncUser = async (req, res) => {
     }
 };
 
+const claimRewards = async (req, res) => {
+    try {
+        const { telegramId } = req.body;
+        if (!telegramId) {
+            return res.status(400).json({ message: 'Telegram ID es requerido.' });
+        }
+
+        const user = await User.findOne({ telegramId });
+        if (!user) {
+            return res.status(404).json({ message: 'Usuario no encontrado.' });
+        }
+
+        const cycleDurationMs = (ECONOMY_CONFIG.CYCLE_DURATION_HOURS || 24) * 60 * 60 * 1000;
+        const elapsedTime = Date.now() - new Date(user.lastClaim).getTime();
+
+        if (elapsedTime < cycleDurationMs) {
+            return res.status(403).json({ message: 'Aún no puedes reclamar. El ciclo no ha terminado.' });
+        }
+        
+        // La recompensa a dar es la capacidad total del ciclo.
+        // Por ahora es fija, pero en el futuro podría incluir boosts.
+        const rewardAmount = ECONOMY_CONFIG.DAILY_CLAIM_REWARD || 350;
+
+        user.autBalance += rewardAmount;
+        user.lastClaim = new Date(); // ¡CRUCIAL! Esto reinicia el ciclo.
+
+        await user.save();
+
+        // El frontend espera el objeto de usuario actualizado dentro de una clave "user".
+        res.status(200).json({
+            message: `¡Has reclamado ${rewardAmount} AUT!`,
+            user: user
+        });
+
+    } catch (error) {
+        console.error('Error al reclamar recompensas:', error);
+        res.status(500).json({ message: 'Error interno del servidor.' });
+    }
+};
+
 const getUserData = async (req, res) => {
     try {
         const { telegramId } = req.params;
@@ -59,5 +99,5 @@ const getUserData = async (req, res) => {
     }
 };
 
-module.exports = { syncUser, getUserData };
+module.exports = { syncUser, getUserData , claimRewards };
 // --- END OF FILE atu-mining-api/controllers/userController.js (FINAL) ---

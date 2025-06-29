@@ -1,19 +1,17 @@
-// atu-mining-api/routes/userRoutes.js - VERSIÓN FINAL Y CORRECTA
+// atu-mining-api/routes/userRoutes.js - VERSIÓN CORREGIDA
 
 const express = require('express');
 const router = express.Router();
-
-// Usamos require para importar el controlador
 const userController = require('../controllers/userController');
 
-// --- RUTA AÑADIDA (ESTA ES LA SOLUCIÓN) ---
-// Esta ruta es la que el frontend busca al iniciar.
-// Responde a peticiones POST en /api/users/sync
+// Ruta de sincronización existente
 router.post('/sync', userController.syncUser);
 
-// --- RUTA EXISTENTE ---
-// Esta ruta se mantiene para cualquier otra necesidad futura.
+// Ruta de datos existente
 router.get('/data/:telegramId', userController.getUserData);
 
-// Exportamos el router con la sintaxis antigua
+// --- AÑADIR ESTA NUEVA RUTA AL ARCHIVO ---
+// Esta será la ruta para reclamar las recompensas.
+router.post('/claim', userController.claimRewards);
+
 module.exports = router;

@@ -7,6 +7,8 @@ const ECONOMY_CONFIG = {
     // Aquí puedes añadir más constantes en el futuro, como:
     // baseYieldPerHour: 350 / 24,
     // cycleDurationHours: 24,
+    DAILY_CLAIM_REWARD: 350,
+    CYCLE_DURATION_HOURS: 24,
 };
 
 module.exports = ECONOMY_CONFIG;
