@@ -10,54 +10,69 @@ const BASE_YIELD_PER_HOUR = 350 / 24;
 const syncUser = async (req, res) => {
     try {
         const { telegramId, firstName, username, photoUrl, refCode } = req.body;
-        if (!telegramId) {
-            return res.status(400).json({ message: 'Telegram ID es requerido.' });
+        if (!telegramId) return res.status(400).json({ message: 'Telegram ID es requerido.' });
+
+        let user = await User.findOne({ telegramId });
+        let showWelcome = false;
+
+        // --- PASO 1: MANEJAR AL USUARIO NUEVO ---
+        if (!user) {
+            console.log(`[Sync-vFinal] Usuario nuevo detectado: ${telegramId}.`);
+            showWelcome = true;
+            
+            // Creamos el objeto del nuevo usuario
+            const newUser_data = {
+                telegramId,
+                firstName,
+                username,
+                photoUrl,
+                hasSeenWelcome: true
+            };
+
+            // Si hay un refCode, buscamos al referente ANTES de crear al nuevo usuario.
+            if (refCode) {
+                const referrer = await User.findOne({ telegramId: parseInt(refCode, 10) });
+                if (referrer) {
+                    console.log(`[Sync-vFinal] Referente ${refCode} encontrado. Asignando su ID.`);
+                    // Añadimos el ID del referente a los datos del nuevo usuario
+                    newUser_data.referrerId = referrer._id;
+                } else {
+                    console.log(`[Sync-vFinal] RefCode ${refCode} recibido, pero el referente no fue encontrado en la DB.`);
+                }
+            }
+            
+            // Creamos y guardamos al nuevo usuario con todos sus datos.
+            user = new User(newUser_data);
+            await user.save();
+            console.log(`[Sync-vFinal] Nuevo usuario ${telegramId} guardado con referrerId: ${user.referrerId}`);
+
+            // --- PASO 2: ACTUALIZAR AL REFERENTE (si existe) ---
+            // Esta operación es ahora completamente separada.
+            if (user.referrerId) {
+                await User.updateOne(
+                    { _id: user.referrerId },
+                    { $push: { referrals: user._id } }
+                );
+                console.log(`[Sync-vFinal] El array de referidos del referente ha sido actualizado.`);
+            }
+        } else { // Es un usuario existente
+            user.firstName = firstName || user.firstName;
+            user.username = username || user.username;
+            user.photoUrl = photoUrl || user.photoUrl;
+            await user.save();
         }
         
-        // Usamos una sesión de Mongoose para asegurar que ambas operaciones (crear y actualizar)
-        // se completen exitosamente, o ninguna lo haga (atomicidad).
-        const session = await User.startSession();
-        let user;
-        
-        await session.withTransaction(async () => {
-            user = await User.findOne({ telegramId }).session(session);
-            let showWelcome = false;
-
-            if (!user) { // Es un usuario nuevo
-                user = new User({ telegramId, firstName, username, photoUrl, hasSeenWelcome: true });
-                showWelcome = true;
-
-                if (refCode) {
-                    const referrer = await User.findOne({ telegramId: parseInt(refCode, 10) }).session(session);
-                    if (referrer) {
-                        user.referrerId = referrer._id;
-                        // Usamos $push directamente en la actualización del referente
-                        referrer.referrals.push(user._id);
-                        await referrer.save({ session });
-                    }
-                }
-                await user.save({ session });
-            } else { // Es un usuario existente
-                user.firstName = firstName || user.firstName;
-                user.username = username || user.username;
-                user.photoUrl = photoUrl || user.photoUrl;
-                await user.save({ session });
-            }
-        });
-
-        session.endSession();
-
-        // Después de la transacción, obtenemos los datos completos para enviar al frontend
+        // --- PASO 3: ENVIAR RESPUESTA AL FRONTEND ---
         const populatedUser = await User.findById(user._id).populate({ path: 'referrals', select: 'firstName photoUrl' });
         const userObject = populatedUser.toObject();
         userObject.config = ECONOMY_CONFIG;
-        userObject.showWelcomeModal = !user.hasSeenWelcome;
+        userObject.showWelcomeModal = showWelcome;
         
         res.status(200).json(userObject);
 
     } catch (error) {
-        console.error('Error fatal en syncUser:', error);
-        res.status(500).json({ message: 'Error interno grave al sincronizar.', details: error.message });
+        console.error('❌ [Sync-vFinal] Error fatal en syncUser:', error);
+        res.status(500).json({ message: 'Error interno grave.', details: error.message });
     }
 };
 // --- claimRewards y getUserData (SIN CAMBIOS) ---
