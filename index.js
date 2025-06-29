@@ -11,6 +11,7 @@ const boostRoutes = require('./routes/boostRoutes');
 const taskRoutes = require('./routes/taskRoutes');
 const referralRoutes = require('./routes/referralRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
+const transactionRoutes = require('./routes/transactionRoutes');
 const boostService = require('./services/boost.service');
 const User = require('./models/User');
 
@@ -57,6 +58,7 @@ app.use('/api/boosts', boostRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/referrals', referralRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/transactions', transactionRoutes);
 
 
 // =================================================================
