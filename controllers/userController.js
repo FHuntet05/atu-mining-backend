@@ -1,4 +1,4 @@
-// atu-mining-api/controllers/userController.js (VERSIÓN SIMPLE Y CORRECTA)
+// atu-mining-api/controllers/userController.js (VERSIÓN FINAL Y ROBUSTA PARA REGISTRO)
 const User = require('../models/User');
 const ECONOMY_CONFIG = require('../config/economy');
 const Transaction = require('../models/Transaction');
@@ -14,52 +14,44 @@ const syncUser = async (req, res) => {
             return res.status(400).json({ message: 'Telegram ID es requerido.' });
         }
         
-        let user = await User.findOne({ telegramId });
-        let showWelcome = false;
-
-        if (!user) { // Es un usuario nuevo
-            console.log(`[Sync] Usuario nuevo detectado: ${telegramId}. Creando...`);
-            user = new User({
-                telegramId,
-                firstName,
-                username,
-                photoUrl,
-                hasSeenWelcome: true // Lo marcamos como visto para que el modal aparezca
-            });
-            showWelcome = true; // El modal de bienvenida solo se muestra a usuarios nuevos
-
-            // Si el nuevo usuario tiene un código de referido, lo asignamos.
-            if (refCode) {
-                const referrer = await User.findOne({ telegramId: parseInt(refCode, 10) });
-                if (referrer) {
-                    user.referrerId = referrer._id;
-                    console.log(`[Sync] Referente ${referrer.telegramId} encontrado para el nuevo usuario.`);
-                }
-            }
-            // Guardamos al nuevo usuario
-            await user.save();
-            
-            // --- ACTUALIZACIÓN DEL REFERENTE (Paso separado y seguro) ---
-            if (user.referrerId) {
-                await User.updateOne(
-                    { _id: user.referrerId },
-                    { $push: { referrals: user._id } }
-                );
-                console.log(`[Sync] Lista de referidos del referente actualizada.`);
-            }
-
-        } else { // Es un usuario existente
-            user.firstName = firstName || user.firstName;
-            user.username = username || user.username;
-            user.photoUrl = photoUrl || user.photoUrl;
-            await user.save();
-        }
+        // Usamos una sesión de Mongoose para asegurar que ambas operaciones (crear y actualizar)
+        // se completen exitosamente, o ninguna lo haga (atomicidad).
+        const session = await User.startSession();
+        let user;
         
-        // Obtenemos los datos finales para enviar al frontend
+        await session.withTransaction(async () => {
+            user = await User.findOne({ telegramId }).session(session);
+            let showWelcome = false;
+
+            if (!user) { // Es un usuario nuevo
+                user = new User({ telegramId, firstName, username, photoUrl, hasSeenWelcome: true });
+                showWelcome = true;
+
+                if (refCode) {
+                    const referrer = await User.findOne({ telegramId: parseInt(refCode, 10) }).session(session);
+                    if (referrer) {
+                        user.referrerId = referrer._id;
+                        // Usamos $push directamente en la actualización del referente
+                        referrer.referrals.push(user._id);
+                        await referrer.save({ session });
+                    }
+                }
+                await user.save({ session });
+            } else { // Es un usuario existente
+                user.firstName = firstName || user.firstName;
+                user.username = username || user.username;
+                user.photoUrl = photoUrl || user.photoUrl;
+                await user.save({ session });
+            }
+        });
+
+        session.endSession();
+
+        // Después de la transacción, obtenemos los datos completos para enviar al frontend
         const populatedUser = await User.findById(user._id).populate({ path: 'referrals', select: 'firstName photoUrl' });
         const userObject = populatedUser.toObject();
         userObject.config = ECONOMY_CONFIG;
-        userObject.showWelcomeModal = showWelcome;
+        userObject.showWelcomeModal = !user.hasSeenWelcome;
         
         res.status(200).json(userObject);
 
