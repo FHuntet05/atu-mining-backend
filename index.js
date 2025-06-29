@@ -89,11 +89,31 @@ if (process.env.TELEGRAM_BOT_TOKEN && process.env.RENDER_EXTERNAL_URL && process
         url += `?ref=${refCode}`;
     }
 
-        const welcomeMessage = `¡Bienvenido a ATU Mining USDT! 🚀\n\nPresiona el botón de abajo para iniciar la aplicación y comenzar a minar.`;
-        ctx.reply(welcomeMessage, {
+        // Usamos el nombre del usuario para personalizar el saludo
+        const userName = ctx.from.first_name || 'minero';
+        const photoUrl = 'https://i.postimg.cc/hQtL6wsT/ATU-MINING-USDT-1.png'; // URL de tu imagen
+
+        const welcomeMessage = 
+`🎉 ¡Bienvenido a ATU Mining, ${userName}! 🎉
+
+Prepárate para sumergirte en el mundo de la minería de criptomonedas.
+
+🤖 *Tu misión es:*
+⛏️  Minar el token del juego, AUT, de forma automática.
+💎  Mejorar tu equipo con Boosts para acelerar tu producción.
+💰  Intercambiar tus AUT por USDT y retirarlos.
+
+¡Construye tu imperio minero y compite para llegar a la cima del ranking!
+
+👇 Haz clic en el botón de abajo para empezar a minar.`;
+
+        // Enviamos la foto con el texto y el botón
+        ctx.replyWithPhoto(photoUrl, {
+            caption: welcomeMessage,
+            parse_mode: 'Markdown',
             reply_markup: {
                 inline_keyboard: [[{ 
-                    text: '⛏️ Abrir App de Minería', 
+                    text: '⛏️ Minar Ahora', // Texto del botón
                     web_app: { url } 
                 }]]
             }

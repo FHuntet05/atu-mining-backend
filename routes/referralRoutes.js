@@ -1,15 +1,9 @@
-// atu-mining-api/routes/referralRoutes.js (VERSIÓN FINAL Y OPTIMIZADA)
+// atu-mining-api/routes/referralRoutes.js (VERSIÓN FINAL CON CONTEO DE NIVELES CORREGIDO)
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
-const mongoose = require('mongoose');
 
-// Definimos las comisiones en un solo lugar para mantener la consistencia
-const COMMISSIONS = {
-    level1: 0.27,
-    level2: 0.17,
-    level3: 0.07,
-};
+const COMMISSIONS = { level1: 0.27, level2: 0.17, level3: 0.07 };
 
 router.get('/:telegramId', async (req, res) => {
     try {
@@ -20,93 +14,68 @@ router.get('/:telegramId', async (req, res) => {
             return res.status(400).json({ message: 'Telegram ID inválido.' });
         }
 
-        const userObjectId = await User.findOne({ telegramId: userId }).select('_id');
-        if (!userObjectId) {
+        const user = await User.findOne({ telegramId: userId }).select('_id referrals referralEarnings');
+        if (!user) {
             return res.status(404).json({ message: 'Usuario no encontrado.' });
         }
 
-        // --- PIPELINE DE AGREGACIÓN DE MONGODB ---
-        // Esta es la forma más eficiente de obtener todos los datos que necesitamos.
+        // --- PIPELINE DE AGREGACIÓN CORREGIDO ---
         const referralStats = await User.aggregate([
-            // 1. Encontrar al usuario principal
-            { $match: { _id: userObjectId._id } },
+            // 1. Empezamos con los referidos directos del usuario (Nivel 1)
+            { $match: { _id: { $in: user.referrals } } },
             
-            // 2. Traer los datos de los referidos de Nivel 1
+            // 2. Agrupamos para contar el Nivel 1 y obtener sus IDs
             {
-                $lookup: {
-                    from: 'users',
-                    localField: 'referrals',
-                    foreignField: '_id',
-                    as: 'level1Referrals'
+                $group: {
+                    _id: null,
+                    level1_docs: { $push: '$$ROOT' }, // Guardamos los documentos completos
+                    level1_ids: { $push: '$_id' } // Guardamos solo los IDs
                 }
             },
             
-            // 3. Traer los datos de los referidos de Nivel 2
+            // 3. Buscamos los referidos de Nivel 2 usando los IDs del Nivel 1
             {
                 $lookup: {
                     from: 'users',
-                    localField: 'level1Referrals._id',
+                    localField: 'level1_ids',
                     foreignField: 'referrerId',
-                    as: 'level2Referrals'
+                    as: 'level2_docs'
                 }
             },
 
-            // 4. Traer los datos de los referidos de Nivel 3
+            // 4. Buscamos los referidos de Nivel 3 usando los IDs del Nivel 2
             {
                 $lookup: {
                     from: 'users',
-                    localField: 'level2Referrals._id',
+                    localField: 'level2_docs._id',
                     foreignField: 'referrerId',
-                    as: 'level3Referrals'
+                    as: 'level3_docs'
                 }
             },
 
-            // 5. Proyectar y calcular los datos finales que enviaremos al frontend
+            // 5. Proyectamos y calculamos los datos finales
             {
                 $project: {
-                    _id: 0, // No necesitamos el ID en la respuesta final
-                    code: '$telegramId',
-                    totalEarnings: '$referralEarnings',
-                    level1: {
-                        count: { $size: '$level1Referrals' },
-                        // Calculamos las ganancias contando cuántos han comprado
-                        earnings: { $multiply: [ { $size: { $filter: { input: "$level1Referrals", as: "ref", cond: { $eq: [ "$$ref.hasGeneratedReferralCommission", true ] } } } }, COMMISSIONS.level1 ] }
-                    },
-                    level2: {
-                        count: { $size: '$level2Referrals' },
-                        earnings: { $multiply: [ { $size: { $filter: { input: "$level2Referrals", as: "ref", cond: { $eq: [ "$$ref.hasGeneratedReferralCommission", true ] } } } }, COMMISSIONS.level2 ] }
-                    },
-                    level3: {
-                        count: { $size: '$level3Referrals' },
-                        earnings: { $multiply: [ { $size: { $filter: { input: "$level3Referrals", as: "ref", cond: { $eq: [ "$$ref.hasGeneratedReferralCommission", true ] } } } }, COMMISSIONS.level3 ] }
-                    }
+                    _id: 0,
+                    level1_count: { $size: '$level1_docs' },
+                    level2_count: { $size: '$level2_docs' },
+                    level3_count: { $size: '$level3_docs' },
+                    level1_earnings: { $multiply: [ { $size: { $filter: { input: "$level1_docs", as: "ref", cond: { $eq: [ "$$ref.hasGeneratedReferralCommission", true ] } } } }, COMMISSIONS.level1 ] },
+                    level2_earnings: { $multiply: [ { $size: { $filter: { input: "$level2_docs", as: "ref", cond: { $eq: [ "$$ref.hasGeneratedReferralCommission", true ] } } } }, COMMISSIONS.level2 ] },
+                    level3_earnings: { $multiply: [ { $size: { $filter: { input: "$level3_docs", as: "ref", cond: { $eq: [ "$$ref.hasGeneratedReferralCommission", true ] } } } }, COMMISSIONS.level3 ] }
                 }
             }
         ]);
 
-        if (referralStats.length === 0) {
-            // Esto puede pasar si el usuario existe pero no tiene referidos
-            return res.status(200).json({
-                code: userId,
-                totalEarnings: 0,
-                tiers: [
-                  { level: 1, title: 'Nivel 1', invites: 0, earnings: 0, color: '#4ef2f7', gainPerReferral: `${COMMISSIONS.level1}` },
-                  { level: 2, title: 'Nivel 2', invites: 0, earnings: 0, color: '#f7a84e', gainPerReferral: `${COMMISSIONS.level2}` },
-                  { level: 3, title: 'Nivel 3', invites: 0, earnings: 0, color: '#d84ef7', gainPerReferral: `${COMMISSIONS.level3}` },
-                ]
-            });
-        }
+        const stats = referralStats[0] || {};
         
-        const data = referralStats[0];
-
-        // Formateamos la respuesta para que coincida con lo que espera el frontend
         const responseData = {
-            code: data.code,
-            totalEarnings: data.totalEarnings,
+            code: userId,
+            totalEarnings: user.referralEarnings || 0,
             tiers: [
-                { level: 1, title: 'Nivel 1', invites: data.level1.count, earnings: data.level1.earnings.toFixed(2), color: '#4ef2f7', gainPerReferral: `${COMMISSIONS.level1}` },
-                { level: 2, title: 'Nivel 2', invites: data.level2.count, earnings: data.level2.earnings.toFixed(2), color: '#f7a84e', gainPerReferral: `${COMMISSIONS.level2}` },
-                { level: 3, title: 'Nivel 3', invites: data.level3.count, earnings: data.level3.earnings.toFixed(2), color: '#d84ef7', gainPerReferral: `${COMMISSIONS.level3}` }
+                { level: 1, title: 'Nivel 1', invites: stats.level1_count || 0, earnings: (stats.level1_earnings || 0).toFixed(2), color: '#4ef2f7', gainPerReferral: `${COMMISSIONS.level1}` },
+                { level: 2, title: 'Nivel 2', invites: stats.level2_count || 0, earnings: (stats.level2_earnings || 0).toFixed(2), color: '#f7a84e', gainPerReferral: `${COMMISSIONS.level2}` },
+                { level: 3, title: 'Nivel 3', invites: stats.level3_count || 0, earnings: (stats.level3_earnings || 0).toFixed(2), color: '#d84ef7', gainPerReferral: `${COMMISSIONS.level3}` }
             ]
         };
 
