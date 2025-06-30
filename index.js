@@ -84,7 +84,28 @@ if (process.env.TELEGRAM_BOT_TOKEN && process.env.RENDER_EXTERNAL_URL && process
 // En atu-mining-api/index.js
 
 bot.command('start', (ctx) => {
-    const finalWebAppUrl = process.env.FRONTEND_URL;
+    const refCode = ctx.startPayload;
+    let finalWebAppUrl = process.env.FRONTEND_URL;
+
+    // Usamos el constructor de URL para manipular los parámetros de forma segura.
+    try {
+        const webAppUrl = new URL(finalWebAppUrl);
+        
+        // 1. Si hay un código de referido, lo añadimos.
+        if (refCode && refCode.trim() !== '') {
+            webAppUrl.searchParams.set('ref', refCode.trim());
+        }
+
+        // 2. !! LA SOLUCIÓN CLAVE (CACHE BUSTING) !!
+        // Añadimos un parámetro aleatorio con la hora actual para que la URL sea siempre única.
+        webAppUrl.searchParams.set('v', Date.now());
+
+        finalWebAppUrl = webAppUrl.toString();
+
+    } catch (error) {
+        console.error("Error construyendo la URL de la Web App, usando URL base.", error);
+    }
+    
     const userName = ctx.from.first_name || 'minero';
     const photoUrl = 'https://i.postimg.cc/hQtL6wsT/ATU-MINING-USDT-1.png';
     const welcomeMessage = `🎉 ¡Bienvenido a ATU Mining, ${userName}! 🎉\n\n... (tu mensaje) ...`;
