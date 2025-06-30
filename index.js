@@ -84,14 +84,35 @@ if (process.env.TELEGRAM_BOT_TOKEN && process.env.RENDER_EXTERNAL_URL && process
 // En atu-mining-api/index.js
 
 // En atu-mining-api/index.js
+// En atu-mining-api/index.js
+
+// --- COMANDO /start (VERSIÓN INTELIGENTE CON PUENTE) ---
 bot.command('start', (ctx) => {
+    // 1. Extraemos el código de referido del mensaje (ej: "/start 12345")
+    const refCode = ctx.startPayload; // Telegraf nos lo da procesado en `ctx.startPayload`
+    
+    // 2. Definimos la URL base de nuestra Mini App desde las variables de entorno
+    const baseWebAppUrl = process.env.FRONTEND_URL;
+
+    // 3. Construimos la URL final dinámicamente
+    let finalWebAppUrl = baseWebAppUrl;
+    if (refCode && baseWebAppUrl) {
+        // Si hay código de referido, lo añadimos como parámetro `startapp`
+        // Esto crea el "puente" para pasar el código a la Mini App
+        finalWebAppUrl = `${baseWebAppUrl}?startapp=${refCode}`;
+        console.log(`[Bot Start] URL con referido construida: ${finalWebAppUrl}`);
+    } else {
+        console.log(`[Bot Start] URL sin referido construida: ${finalWebAppUrl}`);
+    }
+
+    // 4. Enviamos el mensaje de bienvenida con el botón que apunta a la URL correcta
     const welcomeMessage = `¡Bienvenido a ATU Mining USDT! 🚀\n\nPresiona el botón de abajo para iniciar la aplicación y comenzar a minar.`;
     ctx.reply(welcomeMessage, {
         reply_markup: {
             inline_keyboard: [[{ 
                 text: '⛏️ Abrir App de Minería', 
-                // Asegúrate de que esta variable existe en tu .env del backend
-                web_app: { url: process.env.FRONTEND_URL } 
+                // La URL del botón ahora contiene el código de referido (si existía)
+                web_app: { url: finalWebAppUrl }
             }]]
         }
     });
