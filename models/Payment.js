@@ -5,11 +5,9 @@ const mongoose = require('mongoose');
 const paymentSchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     senderAddress: { type: String, required: true, lowercase: true, trim: true, index: true },
-    telegramId: { type: Number, required: true, unique: true, index: true },
+    
     boostId: { type: String, required: true },
     quantity: { type: Number, required: true },
-     firstName: { type: String, required: true },
-    username: { type: String, required: false },
     baseAmount: { type: Number, required: true },
     status: { type: String, enum: ['pending', 'completed', 'failed', 'expired'], default: 'pending', index: true },
     txHash: { type: String, default: null },

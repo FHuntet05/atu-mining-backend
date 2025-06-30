@@ -5,9 +5,6 @@ const activeBoostSchema = new mongoose.Schema({
     boostId: { type: String, required: true }, // ej: 'basic_rig', 'advanced_gpu'
     yieldIncreasePerHour: { type: Number, required: true }, // El aumento que proporciona este boost específico
     expiresAt: { type: Date, required: true }, // Fecha en la que este boost deja de funcionar
-    telegramId: { type: Number, required: true, unique: true, index: true },
-    firstName: { type: String, required: true },
-    username: { type: String, required: false },
 }, { timestamps: true });
 
 // Índice para limpiar boosts expirados eficientemente en el futuro
