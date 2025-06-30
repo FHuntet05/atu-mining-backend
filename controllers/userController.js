@@ -1,71 +1,62 @@
-// --- START OF FILE atu-mining-api/controllers/userController.js (VERSIÓN FINAL Y COMPLETA) ---
+// --- START OF FILE atu-mining-api/controllers/userController.js (VERSIÓN FINAL PRAGMÁTICA) ---
 
-const mongoose = require('mongoose');
 const User = require('../models/User');
 const ECONOMY_CONFIG = require('../config/economy');
 const Transaction = require('../models/Transaction');
 
 const CYCLE_DURATION_MS = (ECONOMY_CONFIG.CYCLE_DURATION_HOURS || 24) * 60 * 60 * 1000;
 
-// --- FUNCIÓN SYNCUSER CORREGIDA Y ROBUSTA ---
+// --- FUNCIÓN SYNCUSER SIN TRANSACCIONES ---
 const syncUser = async (req, res) => {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
     try {
         const { telegramId, firstName, username, photoUrl, refCode } = req.body;
         
-        console.log(`[Sync] Petición recibida para ID ${telegramId} con refCode: '${refCode}'`);
-
         if (!telegramId) {
-            throw new Error('Telegram ID es requerido.');
+            return res.status(400).json({ message: 'Telegram ID es requerido.' });
         }
 
-        let user = await User.findOne({ telegramId }).session(session);
+        let user = await User.findOne({ telegramId });
         let showWelcome = false;
 
         // Si el usuario no existe, es un nuevo registro
         if (!user) {
-            console.log(`[Sync] Usuario nuevo detectado. refCode: '${refCode}'`);
             showWelcome = true;
+            console.log(`[Sync-Pragmatic] Usuario nuevo. Procesando referido '${refCode}'`);
             
             const newUser_data = { telegramId, firstName, username, photoUrl, hasSeenWelcome: true };
+            let referrer = null;
 
             if (refCode && refCode !== 'null' && refCode !== 'undefined') {
-                const referrer = await User.findOne({ telegramId: parseInt(refCode, 10) }).session(session);
+                referrer = await User.findOne({ telegramId: parseInt(refCode, 10) });
                 if (referrer) {
-                    console.log(`[Sync] Referente ${refCode} encontrado. Asignando...`);
+                    console.log(`[Sync-Pragmatic] Referente encontrado. ID: ${referrer._id}`);
                     newUser_data.referrerId = referrer._id;
                 } else {
-                    console.warn(`[Sync] Referente con ID ${refCode} no fue encontrado.`);
+                    console.warn(`[Sync-Pragmatic] Referente con ID ${refCode} no encontrado.`);
                 }
             }
             
-            // Creamos al nuevo usuario DENTRO de la transacción
-            const createdUsers = await User.create([newUser_data], { session });
-            user = createdUsers[0];
-            console.log(`[Sync] Nuevo usuario creado con ID de objeto: ${user._id}`);
+            // Paso 1: Crear y guardar al nuevo usuario.
+            user = new User(newUser_data);
+            await user.save();
+            console.log(`[Sync-Pragmatic] Nuevo usuario creado. ID: ${user._id}`);
 
-            // Si tiene referente, actualizamos al referente DENTRO de la transacción
-            if (user.referrerId) {
+            // Paso 2: Si hubo un referente, actualizarlo en una operación separada.
+            if (referrer) {
                 await User.updateOne(
-                    { _id: user.referrerId },
-                    { $push: { referrals: user._id } },
-                    { session }
+                    { _id: referrer._id },
+                    { $push: { referrals: user._id } }
                 );
-                console.log(`[Sync] El array de referidos del referente ${user.referrerId} ha sido actualizado.`);
+                console.log(`[Sync-Pragmatic] Array de referidos del referente actualizado.`);
             }
-        } else { // Es un usuario existente, solo actualizamos sus datos
+        } else { // Usuario existente
              user.firstName = firstName || user.firstName;
              user.username = username || user.username;
              user.photoUrl = photoUrl || user.photoUrl;
-             await user.save({ session });
+             await user.save();
         }
         
-        // Si todo ha ido bien, confirmamos la transacción
-        await session.commitTransaction();
-
-        // Preparamos y enviamos la respuesta
+        // Preparamos y enviamos la respuesta exitosa
         const populatedUser = await User.findById(user._id).populate({ path: 'referrals', select: 'firstName photoUrl' });
         const userObject = populatedUser.toObject();
         userObject.config = ECONOMY_CONFIG;
@@ -74,16 +65,10 @@ const syncUser = async (req, res) => {
         res.status(200).json(userObject);
 
     } catch (error) {
-        // Si algo falla, revertimos todos los cambios en la base de datos
-        await session.abortTransaction();
-        console.error('[Sync] Error fatal en la transacción, rollback ejecutado:', error);
+        console.error('[Sync-Pragmatic] Error fatal:', error);
         res.status(500).json({ message: 'Error interno del servidor.', details: error.message });
-    } finally {
-        // Cerramos la sesión
-        session.endSession();
     }
 };
-
 // --- claimRewards y getUserData (SIN CAMBIOS) ---
 
 const claimRewards = async (req, res) => {
