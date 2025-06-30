@@ -80,48 +80,51 @@ if (process.env.TELEGRAM_BOT_TOKEN && process.env.RENDER_EXTERNAL_URL && process
     bot.use(Telegraf.log());
    
 //COMAND /START
-
-// En atu-mining-api/index.js
-
-// En atu-mining-api/index.js
-// En atu-mining-api/index.js
-
-// --- COMANDO /start (VERSIÓN INTELIGENTE CON PUENTE) ---
-// En atu-mining-api/index.js
-
-// --- COMANDO /start (VERSIÓN FINAL, A PRUEBA DE TODO) ---
 bot.command('start', (ctx) => {
+    // 1. La lógica para extraer el código de referido se mantiene igual.
     let refCode = null;
-
-    // INTENTO 1: Usar el startPayload oficial de Telegraf (para el primer inicio)
     if (ctx.startPayload) {
         refCode = ctx.startPayload;
-        console.log(`[DIAGNÓSTICO BOT vFinal] Código de referido encontrado en ctx.startPayload: '${refCode}'`);
     } else {
-        // INTENTO 2: Extraer manualmente el código del texto del mensaje (para inicios posteriores)
         const parts = ctx.message.text.split(' ');
         if (parts.length > 1 && parts[1]) {
             refCode = parts[1].trim();
-            console.log(`[DIAGNÓSTICO BOT vFinal] Código de referido extraído manualmente del texto: '${refCode}'`);
         }
     }
-    
-    // Si después de ambos intentos no hay código, lo logueamos.
-    if (!refCode) {
-        console.log(`[DIAGNÓSTICO BOT vFinal] No se encontró código de referido en esta interacción.`);
-    }
 
+    // 2. La lógica para construir la URL de la Mini App también se mantiene.
     const baseWebAppUrl = process.env.FRONTEND_URL;
     let finalWebAppUrl = baseWebAppUrl;
-
     if (refCode && baseWebAppUrl) {
         finalWebAppUrl = `${baseWebAppUrl}?startapp=${refCode}`;
     }
 
-    console.log(`[DIAGNÓSTICO BOT vFinal] URL final construida para el botón: ${finalWebAppUrl}`);
+    // --- !! INICIO DE LA NUEVA LÓGICA DE MENSAJE !! ---
 
-    const welcomeMessage = `¡Bienvenido a ATU Mining USDT! 🚀\n\nPresiona el botón de abajo para iniciar la aplicación y comenzar a minar.`;
-    ctx.reply(welcomeMessage, {
+    // 3. Definimos la URL de la imagen y obtenemos el nombre del usuario.
+    const photoUrl = 'https://postimg.cc/hQtL6wsT';
+    const firstName = ctx.from.first_name || 'Miner'; // Usamos 'Miner' si no tiene nombre.
+
+    // 4. Creamos el texto (caption) dinámicamente usando el nombre del usuario.
+    const welcomeCaption = 
+`🎉 ¡Bienvenido a PENIXBOT, ${firstName}! 🎉
+
+Prepárate para sumergirte en el mundo de la minería de criptomonedas.
+
+🤖 Tu misión es:
+⛏️  Minar el token del juego, AUT, de forma automática.
+💎  Mejorar tu equipo con Boosts para acelerar tu producción.
+💰  Intercambiar tus AUT por USDT y retirarlos.
+
+¡Construye tu imperio minero y compite para llegar a la cima del ranking!
+
+👇 Haz clic en el botón de abajo para empezar a minar.`;
+
+    // 5. Usamos ctx.replyWithPhoto para enviar la imagen con el texto y el botón.
+    ctx.replyWithPhoto(photoUrl, {
+        caption: welcomeCaption,
+        // Opcional: si quieres usar formato como *negrita* o _cursiva_, añade la siguiente línea:
+        // parse_mode: 'MarkdownV2',
         reply_markup: {
             inline_keyboard: [[{ 
                 text: '⛏️ Abrir App de Minería', 
@@ -130,6 +133,8 @@ bot.command('start', (ctx) => {
         }
     });
 });
+
+
 
     // --- COMANDO /addboost ---
     bot.command('addboost', async (ctx) => {
