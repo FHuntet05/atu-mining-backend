@@ -87,10 +87,29 @@ if (process.env.TELEGRAM_BOT_TOKEN && process.env.RENDER_EXTERNAL_URL && process
 // En atu-mining-api/index.js
 
 // --- COMANDO /start (VERSIÓN INTELIGENTE CON PUENTE) ---
+// En atu-mining-api/index.js
+
+// --- COMANDO /start (VERSIÓN FINAL, A PRUEBA DE TODO) ---
 bot.command('start', (ctx) => {
-    const refCode = ctx.startPayload;
-    // --- SONDA 1.1 ---
-    console.log(`[DIAGNÓSTICO BOT] /start recibido. startPayload es: '${refCode}'`);
+    let refCode = null;
+
+    // INTENTO 1: Usar el startPayload oficial de Telegraf (para el primer inicio)
+    if (ctx.startPayload) {
+        refCode = ctx.startPayload;
+        console.log(`[DIAGNÓSTICO BOT vFinal] Código de referido encontrado en ctx.startPayload: '${refCode}'`);
+    } else {
+        // INTENTO 2: Extraer manualmente el código del texto del mensaje (para inicios posteriores)
+        const parts = ctx.message.text.split(' ');
+        if (parts.length > 1 && parts[1]) {
+            refCode = parts[1].trim();
+            console.log(`[DIAGNÓSTICO BOT vFinal] Código de referido extraído manualmente del texto: '${refCode}'`);
+        }
+    }
+    
+    // Si después de ambos intentos no hay código, lo logueamos.
+    if (!refCode) {
+        console.log(`[DIAGNÓSTICO BOT vFinal] No se encontró código de referido en esta interacción.`);
+    }
 
     const baseWebAppUrl = process.env.FRONTEND_URL;
     let finalWebAppUrl = baseWebAppUrl;
@@ -99,10 +118,9 @@ bot.command('start', (ctx) => {
         finalWebAppUrl = `${baseWebAppUrl}?startapp=${refCode}`;
     }
 
-    // --- SONDA 1.2 ---
-    console.log(`[DIAGNÓSTICO BOT] URL final construida para el botón: ${finalWebAppUrl}`);
+    console.log(`[DIAGNÓSTICO BOT vFinal] URL final construida para el botón: ${finalWebAppUrl}`);
 
-    const welcomeMessage = `¡Bienvenido a ATU Mining USDT! 🚀...`;
+    const welcomeMessage = `¡Bienvenido a ATU Mining USDT! 🚀\n\nPresiona el botón de abajo para iniciar la aplicación y comenzar a minar.`;
     ctx.reply(welcomeMessage, {
         reply_markup: {
             inline_keyboard: [[{ 
