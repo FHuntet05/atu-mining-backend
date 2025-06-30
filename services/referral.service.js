@@ -1,14 +1,10 @@
-// atu-mining-api/services/referral.service.js (NUEVO ARCHIVO)
+// --- START OF FILE atu-mining-api/services/referral.service.js (COMPLETO Y CORREGIDO) ---
+
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
-
-// Comisiones fijas por nivel
-const COMMISSIONS = {
-    level1: 0.27,
-    level2: 0.17,
-    level3: 0.07
-};
+// Importamos la configuración central
+const { referralCommissions } = require('../config/economy'); 
 
 /**
  * Procesa y distribuye las comisiones de referido de 3 niveles.
@@ -31,7 +27,8 @@ async function processReferralCommissions({ buyer, session }) {
 
     // 3. Cadena de distribución de comisiones
     let currentReferrerId = buyer.referrerId;
-    const levels = [COMMISSIONS.level1, COMMISSIONS.level2, COMMISSIONS.level3];
+    // Usamos las comisiones desde el archivo de configuración
+    const levels = [referralCommissions.level1, referralCommissions.level2, referralCommissions.level3];
     
     for (let i = 0; i < levels.length; i++) {
         if (!currentReferrerId) break; // Si se acaba la cadena de referidos, paramos.
@@ -65,3 +62,5 @@ async function processReferralCommissions({ buyer, session }) {
 }
 
 module.exports = { processReferralCommissions };
+
+// --- END OF FILE atu-mining-api/services/referral.service.js ---

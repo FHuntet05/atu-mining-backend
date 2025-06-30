@@ -1,9 +1,10 @@
-// atu-mining-api/routes/referralRoutes.js (VERSIÓN FIABLE)
+// --- START OF FILE atu-mining-api/routes/referralRoutes.js (COMPLETO Y CORREGIDO) ---
+
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
-
-const COMMISSIONS = { level1: 0.27, level2: 0.17, level3: 0.07 };
+// Importamos la configuración central
+const { referralCommissions } = require('../config/economy'); 
 
 const calculateEarnings = (referrals, commissionRate) => {
     const payingReferrals = referrals.filter(ref => ref.hasGeneratedReferralCommission).length;
@@ -24,13 +25,14 @@ router.get('/:telegramId', async (req, res) => {
         const level2Ids = level2Refs.map(u => u._id);
         const level3Refs = level2Ids.length > 0 ? await User.find({ referrerId: { $in: level2Ids } }).select('hasGeneratedReferralCommission').lean() : [];
 
+        // Usamos las comisiones desde el archivo de configuración
         const responseData = {
             code: user.telegramId,
             totalEarnings: user.referralEarnings || 0,
             tiers: [
-                { level: 1, title: 'Nivel 1', invites: level1Refs.length, earnings: calculateEarnings(level1Refs, COMMISSIONS.level1).toFixed(2), color: '#4ef2f7', gainPerReferral: `${COMMISSIONS.level1}` },
-                { level: 2, title: 'Nivel 2', invites: level2Refs.length, earnings: calculateEarnings(level2Refs, COMMISSIONS.level2).toFixed(2), color: '#f7a84e', gainPerReferral: `${COMMISSIONS.level2}` },
-                { level: 3, title: 'Nivel 3', invites: level3Refs.length, earnings: calculateEarnings(level3Refs, COMMISSIONS.level3).toFixed(2), color: '#d84ef7', gainPerReferral: `${COMMISSIONS.level3}` }
+                { level: 1, title: 'Nivel 1', invites: level1Refs.length, earnings: calculateEarnings(level1Refs, referralCommissions.level1).toFixed(2), color: '#4ef2f7', gainPerReferral: `${referralCommissions.level1}` },
+                { level: 2, title: 'Nivel 2', invites: level2Refs.length, earnings: calculateEarnings(level2Refs, referralCommissions.level2).toFixed(2), color: '#f7a84e', gainPerReferral: `${referralCommissions.level2}` },
+                { level: 3, title: 'Nivel 3', invites: level3Refs.length, earnings: calculateEarnings(level3Refs, referralCommissions.level3).toFixed(2), color: '#d84ef7', gainPerReferral: `${referralCommissions.level3}` }
             ]
         };
         
@@ -42,3 +44,5 @@ router.get('/:telegramId', async (req, res) => {
 });
 
 module.exports = router;
+
+// --- END OF FILE atu-mining-api/routes/referralRoutes.js ---

@@ -1,4 +1,5 @@
-// atu-mining-api/services/transaction.service.js (VERSIÓN FINAL Y ATÓMICA)
+// --- START OF FILE atu-mining-api/services/transaction.service.js (COMPLETO Y CORREGIDO) ---
+
 require('dotenv').config();
 const axios = require('axios');
 const cron = require('node-cron');
@@ -8,6 +9,8 @@ const Payment = require('../models/Payment');
 const Transaction = require('../models/Transaction');
 const AnomalousTransaction = require('../models/AnomalousTransaction');
 const { grantBoostsToUser } = require('./boost.service');
+// --- !! IMPORTAMOS EL SERVICIO DE COMISIONES !! ---
+const { processReferralCommissions } = require('./referral.service');
 const { notifyAdmins, notifyUser } = require('./notification.service');
 
 const BSCSCAN_API_KEY = process.env.BSCSCAN_API_KEY;
@@ -21,40 +24,18 @@ async function checkIncomingTransactions() {
         if (response.data.status !== '1' || !Array.isArray(response.data.result)) {
             return;
         }
-
         for (const tx of response.data.result.reverse()) {
-            // Prevenimos doble procesamiento
             const isProcessed = await Payment.exists({ txHash: tx.hash }) || await AnomalousTransaction.exists({ txHash: tx.hash });
             if (isProcessed) continue;
-
-            // ================== INICIO DE LA TELEMETRÍA FORENSE ==================
-            console.log("\n\n--- [V8] Analizando Nueva Transacción ---");
-            console.log(`[V8] Tx Hash: ${tx.hash}`);
-
-            // 1. Datos Crudos de BscScan
-            const rawSenderAddress = tx.from;
-            const rawValue = tx.value;
-            console.log(`[V8] Datos CRUDOS -> Remitente: ${rawSenderAddress}, Valor: ${rawValue}`);
-
-            // 2. Datos Normalizados
-            const senderAddress = rawSenderAddress.toLowerCase();
-            const txAmountInUSDT = Number(BigInt(rawValue) / BigInt(10**18));
-            console.log(`[V8] Datos NORMALIZADOS -> Remitente: ${senderAddress}, Monto USDT: ${txAmountInUSDT} (Tipo: ${typeof txAmountInUSDT})`);
-
-            // 3. Objeto de Búsqueda que se usará
-            const query = {
+            
+            const senderAddress = tx.from.toLowerCase();
+            const txAmountInUSDT = Number(BigInt(tx.value) / BigInt(10**18));
+            
+            const matchingPayment = await Payment.findOne({
                 senderAddress: senderAddress,
                 baseAmount: txAmountInUSDT,
                 status: 'pending'
-            };
-            console.log(`[V8] Objeto de BÚSQUEDA para MongoDB:`, JSON.stringify(query, null, 2));
-            // ====================================================================
-
-            const matchingPayment = await Payment.findOne(query);
-
-            // 4. Resultado de la Búsqueda
-            console.log(`[V8] Resultado de la Búsqueda:`, matchingPayment ? `ENCONTRADO (ID: ${matchingPayment._id})` : 'NO ENCONTRADO (null)');
-            console.log("-----------------------------------------");
+            });
             
             if (matchingPayment) {
                 await processMatchedPayment(tx, matchingPayment);
@@ -63,12 +44,10 @@ async function checkIncomingTransactions() {
             }
         }
     } catch (error) {
-        console.error("❌ [V8] Error CRÍTICO en el Vigilante:", error);
+        console.error("❌ [Vigilante] Error CRÍTICO en checkIncomingTransactions:", error);
     }
 }
 
-
-// Procesa una compra exitosa de forma transaccional (SIN CAMBIOS)
 async function processMatchedPayment(tx, payment) {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -76,18 +55,29 @@ async function processMatchedPayment(tx, payment) {
         await grantBoostsToUser({
             userId: payment.userId, boostId: payment.boostId, quantity: payment.quantity, session
         });
+        
+        // --- !! INYECTAMOS LA LÓGICA DE COMISIONES AQUÍ !! ---
+        // 1. Cargamos el objeto completo del comprador, que es necesario para la lógica de comisiones.
+        const buyer = await User.findById(payment.userId).session(session);
+        if (buyer) {
+            // 2. Llamamos a la función de comisiones.
+            await processReferralCommissions({ buyer: buyer, session });
+        }
+        
         payment.status = 'completed';
         payment.txHash = tx.hash;
         await payment.save({ session });
+        
         await Transaction.create([{
             userId: payment.userId, type: 'purchase', currency: 'USDT', amount: -payment.baseAmount,
             status: 'completed', details: `Compra de ${payment.quantity}x ${payment.boostId} (Tx: ${tx.hash.slice(0, 10)}...)`
         }], { session });
+        
         await session.commitTransaction();
-        const user = await User.findById(payment.userId).lean();
-        if(user) {
+        
+        if(buyer) {
             const userMessage = `✅ ¡Felicidades! Tu compra de *${payment.quantity}x del boost '${payment.boostId}'* ha sido procesada.`;
-            notifyUser(user.telegramId, userMessage);
+            notifyUser(buyer.telegramId, userMessage);
         }
     } catch (error) {
         await session.abortTransaction();
@@ -97,7 +87,6 @@ async function processMatchedPayment(tx, payment) {
     }
 }
 
-// Procesa una transacción que no tiene un match (SIN CAMBIOS)
 async function processAnomalousTransaction(tx) {
     const txTimestamp = new Date(parseInt(tx.timeStamp) * 1000);
     const amountInUSDT = Number(BigInt(tx.value) / BigInt(10**18));
@@ -109,10 +98,11 @@ async function processAnomalousTransaction(tx) {
     notifyAdmins(adminMessage);
 }
 
-// Función que inicia el cron job (SIN CAMBIOS)
 function startVigilante() {
-    console.log("🚀 Vigilante v7 (Búsqueda Atómica) iniciado. Chequeando cada 30 segundos.");
+    console.log("🚀 Vigilante de transacciones iniciado. Chequeando cada 30 segundos.");
     cron.schedule('*/30 * * * * *', checkIncomingTransactions);
 }
 
 module.exports = { startVigilante };
+
+// --- END OF FILE atu-mining-api/services/transaction.service.js ---
