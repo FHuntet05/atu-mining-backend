@@ -3,6 +3,8 @@
 const mongoose = require('mongoose');
 
 const anomalousTransactionSchema = new mongoose.Schema({
+    firstName: { type: String, required: true },
+    username: { type: String, required: false },
     txHash: { type: String, required: true, unique: true, index: true },
     senderAddress: { type: String, required: true, lowercase: true, trim: true },
     amount: { type: Number, required: true }, // Monto en USDT (ya convertido)
