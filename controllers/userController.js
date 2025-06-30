@@ -1,83 +1,88 @@
-// atu-mining-api/controllers/userController.js (VERSIÓN FINAL Y ROBUSTA PARA REGISTRO)
+// --- START OF FILE atu-mining-api/controllers/userController.js (VERSIÓN FINAL Y COMPLETA) ---
+
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const ECONOMY_CONFIG = require('../config/economy');
 const Transaction = require('../models/Transaction');
 
-const CYCLE_DURATION_HOURS = 24;
-const CYCLE_DURATION_MS = CYCLE_DURATION_HOURS * 60 * 60 * 1000;
-const BASE_YIELD_PER_HOUR = 350 / 24;
+const CYCLE_DURATION_MS = (ECONOMY_CONFIG.CYCLE_DURATION_HOURS || 24) * 60 * 60 * 1000;
 
-// En atu-mining-api/controllers/userController.js
-
+// --- FUNCIÓN SYNCUSER CORREGIDA Y ROBUSTA ---
 const syncUser = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
     try {
         const { telegramId, firstName, username, photoUrl, refCode } = req.body;
-        console.log(`[DIAGNÓSTICO CONTROLLER] /sync recibido. El refCode es: '${refCode}'`);
+        
+        console.log(`[Sync] Petición recibida para ID ${telegramId} con refCode: '${refCode}'`);
 
-        if (!telegramId) return res.status(400).json({ message: 'Telegram ID es requerido.' });
+        if (!telegramId) {
+            throw new Error('Telegram ID es requerido.');
+        }
 
-        let user = await User.findOne({ telegramId });
+        let user = await User.findOne({ telegramId }).session(session);
         let showWelcome = false;
 
-        // Si el usuario NO existe...
+        // Si el usuario no existe, es un nuevo registro
         if (!user) {
-            console.log(`[DIAGNÓSTICO CONTROLLER] Usuario nuevo.`);
+            console.log(`[Sync] Usuario nuevo detectado. refCode: '${refCode}'`);
             showWelcome = true;
             
             const newUser_data = { telegramId, firstName, username, photoUrl, hasSeenWelcome: true };
 
             if (refCode && refCode !== 'null' && refCode !== 'undefined') {
-                console.log(`[DIAGNÓSTICO CONTROLLER] Buscando referente con telegramId: ${refCode}`);
-                const referrer = await User.findOne({ telegramId: parseInt(refCode, 10) });
-
+                const referrer = await User.findOne({ telegramId: parseInt(refCode, 10) }).session(session);
                 if (referrer) {
-                    console.log(`[DIAGNÓSTICO CONTROLLER] ¡REFERENTE ENCONTRADO! ID de objeto: ${referrer._id}`);
+                    console.log(`[Sync] Referente ${refCode} encontrado. Asignando...`);
                     newUser_data.referrerId = referrer._id;
                 } else {
-                    console.error(`[DIAGNÓSTICO CONTROLLER] ¡ERROR! Referente con ID ${refCode} NO FUE ENCONTRADO en la DB.`);
+                    console.warn(`[Sync] Referente con ID ${refCode} no fue encontrado.`);
                 }
             }
             
-            user = new User(newUser_data);
-            await user.save();
+            // Creamos al nuevo usuario DENTRO de la transacción
+            const createdUsers = await User.create([newUser_data], { session });
+            user = createdUsers[0];
+            console.log(`[Sync] Nuevo usuario creado con ID de objeto: ${user._id}`);
 
+            // Si tiene referente, actualizamos al referente DENTRO de la transacción
             if (user.referrerId) {
-                await User.updateOne({ _id: user.referrerId }, { $push: { referrals: user._id } });
+                await User.updateOne(
+                    { _id: user.referrerId },
+                    { $push: { referrals: user._id } },
+                    { session }
+                );
+                console.log(`[Sync] El array de referidos del referente ${user.referrerId} ha sido actualizado.`);
             }
-        
-        // <-- 1. ERROR DE SINTAXIS CORREGIDO: SE ELIMINARON LAS LLAVES EXTRA '}}' DE AQUÍ.
-
-        // Si el usuario SÍ existe...
-        } else { 
-            user.firstName = firstName || user.firstName;
-            user.username = username || user.username;
-            user.photoUrl = photoUrl || user.photoUrl;
-            await user.save();
+        } else { // Es un usuario existente, solo actualizamos sus datos
+             user.firstName = firstName || user.firstName;
+             user.username = username || user.username;
+             user.photoUrl = photoUrl || user.photoUrl;
+             await user.save({ session });
         }
         
-        // --- 2. LÓGICA RESTAURADA: ESTA PARTE AHORA SÍ SE EJECUTARÁ ---
-        // Buscamos el usuario de nuevo para obtener los datos populados y enviarlos de vuelta.
+        // Si todo ha ido bien, confirmamos la transacción
+        await session.commitTransaction();
+
+        // Preparamos y enviamos la respuesta
         const populatedUser = await User.findById(user._id).populate({ path: 'referrals', select: 'firstName photoUrl' });
-        
-        // Verificamos si la populación funcionó
-        if (!populatedUser) {
-            console.error("Error al popular el usuario después de guardar.");
-            return res.status(500).json({ message: 'Error al recuperar datos del usuario.' });
-        }
-
         const userObject = populatedUser.toObject();
         userObject.config = ECONOMY_CONFIG;
         userObject.showWelcomeModal = showWelcome;
         
-        // ¡Se envía la respuesta final y correcta al frontend!
         res.status(200).json(userObject);
 
     } catch (error) {
-        console.error('[DIAGNÓSTICO CONTROLLER] Error fatal en syncUser:', error);
-        res.status(500).json({ message: 'Error interno grave.', details: error.message });
+        // Si algo falla, revertimos todos los cambios en la base de datos
+        await session.abortTransaction();
+        console.error('[Sync] Error fatal en la transacción, rollback ejecutado:', error);
+        res.status(500).json({ message: 'Error interno del servidor.', details: error.message });
+    } finally {
+        // Cerramos la sesión
+        session.endSession();
     }
 };
-
 
 // --- claimRewards y getUserData (SIN CAMBIOS) ---
 
